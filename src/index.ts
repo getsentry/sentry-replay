@@ -1,6 +1,6 @@
 import { record, EventType } from 'rrweb';
 import * as Sentry from '@sentry/browser';
-import { Dsn, Event } from '@sentry/types';
+import { DsnComponents, Event } from '@sentry/types';
 
 type RRWebEvent = {
   type: EventType;
@@ -44,7 +44,7 @@ export default class SentryRRWeb {
     });
   }
 
-  public attachmentUrlFromDsn(dsn: Dsn, eventId: string) {
+  public attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
     const { host, path, projectId, port, protocol, user } = dsn;
     return `${protocol}://${host}${port !== '' ? `:${port}` : ''}${
       path !== '' ? `/${path}` : ''
