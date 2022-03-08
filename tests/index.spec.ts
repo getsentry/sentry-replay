@@ -1,4 +1,4 @@
-import { SentryReplay } from "../src/";
+import { SentryReplay } from "@";
 
 jest.mock("rrweb");
 
