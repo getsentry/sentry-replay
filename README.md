@@ -28,12 +28,12 @@ To set up the integration add the following to your Sentry initialization:
 
 ```javascript
 import * as Sentry from '@sentry/browser';
-import SentryRRWeb from '@sentry/replay';
+import { SentryReplay } from '@sentry/replay';
 
 Sentry.init({
   dsn: '__DSN__',
   integrations: [
-    new SentryRRWeb({
+    new SentryReplay({
       // ...options
     }),
   ],
@@ -45,12 +45,12 @@ Several options are supported and passable via the integration constructor:
 
 ```javascript
 import * as Sentry from '@sentry/browser';
-import SentryRRWeb from '@sentry/replay';
+import { SentryReplay } from '@sentry/replay';
 
 Sentry.init({
   dsn: '__DSN__',
   integrations: [
-    new SentryRRWeb({
+    new SentryReplay({
       // default is empty
       checkoutEveryNth: 100,
       // default is 5 minutes

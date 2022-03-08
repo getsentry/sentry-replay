@@ -11,9 +11,9 @@ type RRWebEvent = {
 
 type RRWebOptions = Parameters<typeof record>[0];
 
-export default class SentryRRWeb {
-  public readonly name: string = SentryRRWeb.id;
-  public static id: string = 'SentryRRWeb';
+export class SentryReplay {
+  public readonly name: string = SentryReplay.id;
+  public static id: string = 'SentryReplay';
 
   public events: Array<RRWebEvent> = [];
 
@@ -53,7 +53,7 @@ export default class SentryRRWeb {
 
   public setupOnce() {
     Sentry.addGlobalEventProcessor((event: Event) => {
-      const self = Sentry.getCurrentHub().getIntegration(SentryRRWeb);
+      const self = Sentry.getCurrentHub().getIntegration(SentryReplay);
       if (!self) return;
       try {
         // short circuit if theres no events to replay
