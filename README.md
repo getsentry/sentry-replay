@@ -13,13 +13,13 @@ To install the stable version:
 with npm:
 
 ```shell
-npm install --save @sentry/rrweb rrweb
+npm install --save @sentry/replay rrweb
 ```
 
 with yarn:
 
 ```shell
-yarn add @sentry/rrweb rrweb
+yarn add @sentry/replay rrweb
 ```
 
 ## Setup
@@ -28,7 +28,7 @@ To set up the integration add the following to your Sentry initialization:
 
 ```javascript
 import * as Sentry from '@sentry/browser';
-import SentryRRWeb from '@sentry/rrweb';
+import SentryRRWeb from '@sentry/replay';
 
 Sentry.init({
   dsn: '__DSN__',
@@ -45,7 +45,7 @@ Several options are supported and passable via the integration constructor:
 
 ```javascript
 import * as Sentry from '@sentry/browser';
-import SentryRRWeb from '@sentry/rrweb';
+import SentryRRWeb from '@sentry/replay';
 
 Sentry.init({
   dsn: '__DSN__',

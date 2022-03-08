@@ -4,7 +4,7 @@ import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
 import * as Sentry from '@sentry/browser';
-import SentryRRWeb from '@sentry/rrweb';
+import SentryRRWeb from '@sentry/replay';
 
 Sentry.init({
   dsn:
