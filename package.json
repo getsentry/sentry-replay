@@ -5,10 +5,10 @@
   "main": "dist/index.js",
   "module": "dist/index.es.js",
   "scripts": {
-    "clean": "rimraf dist",
-    "build": "rollup -c",
-    "watch": "rollup -cw",
-    "test": "jest"
+    "clean": "yarn rimraf dist",
+    "build": "yarn rollup --config rollup.config.ts --configPlugin @rollup-typescript",
+    "watch": "yarn build --watch",
+    "test": "yarn jest"
   },
   "files": [
     "dist"
