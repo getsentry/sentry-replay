@@ -35,8 +35,10 @@ describe('config', () => {
 
   it('supports other options', () => {
     new SentryReplay({
-      ignoreClass: 'test',
-      maskAllInputs: false,
+      rrwebConfig: {
+        ignoreClass: 'test',
+        maskAllInputs: false,
+      },
     });
 
     expect(rrwebMock.record).toMatchInlineSnapshot(`
