@@ -1,27 +1,22 @@
-import { record, EventType } from 'rrweb';
+import { record } from 'rrweb';
+import type { eventWithTime } from 'rrweb/typings/types';
 import * as Sentry from '@sentry/browser';
 import { DsnComponents } from '@sentry/types';
 
-type RRWebEvent = {
-  type: EventType;
-  data: Record<string, unknown>;
-  timestamp: number;
-  delay?: number;
-};
-
+type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
 
-type SentryReplayConfiguration = {
+interface SentryReplayConfiguration {
   idleTimeout?: number;
   rrwebConfig?: RRWebOptions;
-};
+}
 
 const VISIBILITY_CHANGE_TIMEOUT = 5000;
 
 export class SentryReplay {
   public readonly name: string = SentryReplay.id;
   public static id = 'SentryReplay';
-  public events: Array<RRWebEvent> = [];
+  public events: RRWebEvent[] = [];
 
   /**
    * The id of the Sentry event attachments will be saved to
@@ -35,7 +30,7 @@ export class SentryReplay {
     const { host, path, projectId, port, protocol, user } = dsn;
     return `${protocol}://${host}${port !== '' ? `:${port}` : ''}${
       path !== '' ? `/${path}` : ''
-    }/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=rrweb`;
+    }/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
   }
 
   public constructor({
@@ -146,6 +141,7 @@ export class SentryReplay {
     if (!self) return;
 
     // TODO: If there's a transaction active, we should attach to that?
+    //   --> actually that won't work as-is because we need an event id to upload an attachment
     // const transaction = Sentry.getCurrentHub().getScope().getTransaction();
 
     // Otherwise create a transaction to attach event to
@@ -157,7 +153,7 @@ export class SentryReplay {
 
     // We have to finish the transaction to get an event ID to be able to
     // upload an attachment for that event
-    // @ts-expect-error This returns an eventId (string)
+    // @ts-expect-error This returns an eventId (string), but is not typed as such
     self.eventId = transaction.finish();
 
     return self.eventId;
