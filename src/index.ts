@@ -1,7 +1,9 @@
+import * as Sentry from '@sentry/browser';
+import { DsnComponents, Hub, Transaction } from '@sentry/types';
+import { uuid4 } from '@sentry/utils';
+
 import { record } from 'rrweb';
 import type { eventWithTime } from 'rrweb/typings/types';
-import * as Sentry from '@sentry/browser';
-import { DsnComponents } from '@sentry/types';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
@@ -14,16 +16,51 @@ interface SentryReplayConfiguration {
 const VISIBILITY_CHANGE_TIMEOUT = 5000;
 
 export class SentryReplay {
-  public readonly name: string = SentryReplay.id;
+  /**
+   * @inheritDoc
+   */
   public static id = 'SentryReplay';
+
+  /**
+   * @inheritDoc
+   */
+  public name: string = SentryReplay.id;
+
+  /**
+   * Buffer of rrweb events that will be serialized as JSON and saved as an attachment to a Sentry event
+   */
   public events: RRWebEvent[] = [];
 
   /**
-   * The id of the Sentry event attachments will be saved to
+   * The id of the root Sentry event that all attachments will be saved to
    */
   private eventId: string | undefined;
+
+  /**
+   * A unique id per "replay session" (the term is currently not defined yet)
+   */
+  private replayId: string | undefined;
+
+  /**
+   * A Sentry Transaction that should capture every incremental rrweb update,
+   * but *not* the attachments themselves. This is currently used to capture
+   * breadcrumbs and maybe other spans (e.g. network requests)
+   */
+  private replayEvent: Transaction | undefined;
+
+  /**
+   * Options to pass to rrweb.record
+   */
   private readonly rrwebRecordOptions: RRWebOptions;
+
+  /**
+   * setTimeout id used for debouncing sending rrweb attachments
+   */
   private timeout: number;
+
+  /**
+   * timer id used to consider when the page has become inactive (e.g. from switching tags)
+   */
   private visibilityChangeTimer: number | null;
 
   private static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
@@ -32,6 +69,8 @@ export class SentryReplay {
       path !== '' ? `/${path}` : ''
     }/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
   }
+
+  private _getCurrentHub?: () => Hub;
 
   public constructor({
     idleTimeout = 15000,
@@ -46,12 +85,14 @@ export class SentryReplay {
       maskAllInputs,
       ...rrwebRecordOptions,
     };
+    this.replayId = uuid4();
+    this.createReplayEvent();
     this.events = [];
 
     record({
       ...this.rrwebRecordOptions,
       emit: (event: RRWebEvent, isCheckout?: boolean) => {
-        console.log('record', { isCheckout, event });
+        // console.log('record', { isCheckout, event });
 
         // "debounce" by `idleTimeout`, how often we save replay events i.e. we
         // will save events only if 15 seconds have elapsed since the last
@@ -66,7 +107,7 @@ export class SentryReplay {
 
         // Always create a new Sentry event on checkouts and clear existing rrweb events
         if (isCheckout) {
-          this.createEvent();
+          this.createRootEvent();
           this.events = [event];
         } else {
           this.events.push(event);
@@ -83,6 +124,13 @@ export class SentryReplay {
     });
 
     this.addListeners();
+  }
+
+  setupOnce() {
+    Sentry.addGlobalEventProcessor((event) => {
+      event.tags = { ...event.tags, replayId: this.replayId };
+      return event;
+    });
   }
 
   private addListeners() {
@@ -133,9 +181,12 @@ export class SentryReplay {
   }
 
   /**
-   * Creates the Sentry event that the replays will be saved to
+   * Creates the Sentry event that all replays will be saved to as attachments.
+   * Currently, we only expect one of these per "replay session" (which is not
+   * explicitly defined yet).
    */
-  createEvent() {
+  createRootEvent() {
+    console.log('create root event');
     const self = this.instance;
 
     if (!self) return;
@@ -145,11 +196,13 @@ export class SentryReplay {
     // const transaction = Sentry.getCurrentHub().getScope().getTransaction();
 
     // Otherwise create a transaction to attach event to
-    const transaction = Sentry.startTransaction({
-      name: 'Sentry Replay',
+    const transaction = Sentry.getCurrentHub().startTransaction({
+      name: 'sentry-replay',
+      tags: {
+        hasReplay: true,
+        replayId: this.replayId,
+      },
     });
-
-    transaction.setTag('hasReplay', 'true');
 
     // We have to finish the transaction to get an event ID to be able to
     // upload an attachment for that event
@@ -159,12 +212,25 @@ export class SentryReplay {
     return self.eventId;
   }
 
+  createReplayEvent() {
+    this.replayEvent = Sentry.startTransaction({
+      name: 'sentry-replay-event',
+      tags: {
+        rootReplayId: this.eventId,
+        replayId: this.replayId,
+      },
+    });
+    Sentry.configureScope((scope) => scope.setSpan(this.replayEvent));
+    return this.replayEvent;
+  }
+
   finishReplayEvent() {
+    console.log('finish replay event');
     const self = this.instance;
 
     if (!self) return;
 
-    const eventId = self.eventId || this.createEvent();
+    const eventId = self.eventId || this.createRootEvent();
 
     if (!eventId) {
       console.error('[Sentry]: No transaction, no replay');
@@ -172,6 +238,10 @@ export class SentryReplay {
     }
 
     this.sendReplay(eventId);
+
+    // Close out existing replay event and create a new one
+    this.replayEvent?.finish();
+    this.createReplayEvent();
   }
 
   hasSendBeacon() {
@@ -196,15 +266,12 @@ export class SentryReplay {
       return;
     }
 
-    // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
-
     try {
-      console.log('sending via fetch');
+      // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
       await fetch(endpoint, {
         method: 'POST',
         body: formData,
       });
-      this.events = [];
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry
       console.error(ex);
@@ -233,10 +300,5 @@ export class SentryReplay {
       console.error(ex);
       return false;
     }
-  }
-
-  setupOnce() {
-    // this.createEvent();
-    // Sentry.addGlobalEventProcessor((event: Event) => {});
   }
 }

@@ -26,14 +26,18 @@
   },
   "homepage": "https://github.com/getsentry/sentry-replay#readme",
   "peerDependencies": {
-    "@sentry/browser": ">=4.0.0",
+    "@sentry/browser": ">=6.0.0",
+    "@sentry/tracing": ">=6.0.0",
+    "@sentry/utils": ">=6.0.0",
     "rrweb": ">=0.7.0"
   },
   "devDependencies": {
     "@babel/core": "^7.17.5",
     "@rollup/plugin-typescript": "^8.3.1",
     "@sentry/browser": "^6.18.2",
+    "@sentry/tracing": "^6.18.2",
     "@sentry/types": "^6.18.2",
+    "@sentry/utils": "^6.18.2",
     "@types/jest": "^27.4.1",
     "@types/node": "^16.0.0",
     "@typescript-eslint/eslint-plugin": "^5.14.0",
