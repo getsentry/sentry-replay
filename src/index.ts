@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/browser';
 import { DsnComponents, Hub, Transaction } from '@sentry/types';
-import { uuid4 } from '@sentry/utils';
+import { isDebugBuild, logger, uuid4 } from '@sentry/utils';
 
 import { record } from 'rrweb';
 import type { eventWithTime } from 'rrweb/typings/types';
@@ -70,6 +70,8 @@ export class SentryReplay {
     }/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
   }
 
+  private isDebug: boolean;
+
   private _getCurrentHub?: () => Hub;
 
   public constructor({
@@ -80,11 +82,15 @@ export class SentryReplay {
       ...rrwebRecordOptions
     } = {},
   }: SentryReplayConfiguration = {}) {
+    this.isDebug = isDebugBuild();
     this.rrwebRecordOptions = {
       checkoutEveryNms,
       maskAllInputs,
       ...rrwebRecordOptions,
     };
+
+    // Creates a new replay ID everytime we initialize the plugin (e.g. on every pageload).
+    // TBD on behavior here (e.g. should this be saved to localStorage/cookies)
     this.replayId = uuid4();
     this.createReplayEvent();
     this.events = [];
@@ -92,8 +98,6 @@ export class SentryReplay {
     record({
       ...this.rrwebRecordOptions,
       emit: (event: RRWebEvent, isCheckout?: boolean) => {
-        // console.log('record', { isCheckout, event });
-
         // "debounce" by `idleTimeout`, how often we save replay events i.e. we
         // will save events only if 15 seconds have elapsed since the last
         // event
@@ -116,7 +120,7 @@ export class SentryReplay {
         // Set timer to send attachment to Sentry, will be cancelled if an
         // event happens before `idleTimeout` elapses
         this.timeout = window.setTimeout(() => {
-          console.log('idle timeout hit');
+          logger.log('[replay] rrweb timeout hit, finishing replay event');
           this.finishReplayEvent();
         }, idleTimeout);
         // TODO:
@@ -127,6 +131,8 @@ export class SentryReplay {
   }
 
   setupOnce() {
+    // Tag all (non replay) events that get sent to Sentry with the current
+    // replay ID so that we can reference them later in the UI
     Sentry.addGlobalEventProcessor((event) => {
       event.tags = { ...event.tags, replayId: this.replayId };
       return event;
@@ -138,18 +144,15 @@ export class SentryReplay {
   }
 
   handleVisibilityChange = () => {
-    console.log(
-      'visibility change: ',
-      document.visibilityState,
-      this.visibilityChangeTimer
-    );
-
     if (
       document.visibilityState === 'visible' &&
       this.visibilityChangeTimer === null
     ) {
       // Page has become active/visible again after `VISIBILITY_CHANGE_TIMEOUT`
       // ms have elapsed, which means we will consider this a new session
+      //
+      // TBD if this is the behavior we want
+      logger.log('[replay] document has become active, creating new "session"');
       this.triggerNewSession();
       return;
     }
@@ -176,7 +179,7 @@ export class SentryReplay {
    * then trigger rrweb to take a full snapshot.
    */
   triggerNewSession() {
-    console.log('triggering new session');
+    logger.log('[replay] taking full rrweb snapshot');
     record.takeFullSnapshot(true);
   }
 
@@ -186,16 +189,10 @@ export class SentryReplay {
    * explicitly defined yet).
    */
   createRootEvent() {
-    console.log('create root event');
-    const self = this.instance;
+    if (!this.instance) return;
 
-    if (!self) return;
-
-    // TODO: If there's a transaction active, we should attach to that?
-    //   --> actually that won't work as-is because we need an event id to upload an attachment
-    // const transaction = Sentry.getCurrentHub().getScope().getTransaction();
-
-    // Otherwise create a transaction to attach event to
+    logger.log(`[replay] creating root replay event`);
+    // Create a transaction to attach event to
     const transaction = Sentry.getCurrentHub().startTransaction({
       name: 'sentry-replay',
       tags: {
@@ -207,12 +204,13 @@ export class SentryReplay {
     // We have to finish the transaction to get an event ID to be able to
     // upload an attachment for that event
     // @ts-expect-error This returns an eventId (string), but is not typed as such
-    self.eventId = transaction.finish();
+    this.instance.eventId = transaction.finish();
 
-    return self.eventId;
+    return this.instance.eventId;
   }
 
   createReplayEvent() {
+    logger.log(`[replay] creating child replay event`);
     this.replayEvent = Sentry.startTransaction({
       name: 'sentry-replay-event',
       tags: {
@@ -225,12 +223,10 @@ export class SentryReplay {
   }
 
   finishReplayEvent() {
-    console.log('finish replay event');
-    const self = this.instance;
+    logger.log(`[replay] finish replay event`);
+    if (!this.instance) return;
 
-    if (!self) return;
-
-    const eventId = self.eventId || this.createRootEvent();
+    const eventId = this.instance.eventId || this.createRootEvent();
 
     if (!eventId) {
       console.error('[Sentry]: No transaction, no replay');
@@ -244,6 +240,9 @@ export class SentryReplay {
     this.createReplayEvent();
   }
 
+  /**
+   * Determine if there is browser support for `navigator.sendBeacon`
+   */
   hasSendBeacon() {
     return 'navigator' in window && 'sendBeacon' in window.navigator;
   }
@@ -261,12 +260,13 @@ export class SentryReplay {
 
     // If sendBeacon is supported and payload is smol enough...
     if (this.hasSendBeacon() && stringifiedPayload.length <= 65536) {
-      console.log('sending via beacon');
+      logger.log(`[replay] uploading attachment via sendBeacon()`);
       window.navigator.sendBeacon(endpoint, formData);
       return;
     }
 
     try {
+      logger.log(`[replay] uploading attachment via fetch()`);
       // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
       await fetch(endpoint, {
         method: 'POST',
@@ -279,13 +279,11 @@ export class SentryReplay {
   }
 
   async sendReplay(eventId: string) {
-    const self = this.instance;
-
-    if (!self) return;
+    if (!this.instance) return;
 
     try {
       // short circuit if theres no events to replay
-      if (!self.events.length) return;
+      if (!this.instance.events.length) return;
 
       const client = Sentry.getCurrentHub().getClient();
       const endpoint = SentryReplay.attachmentUrlFromDsn(
@@ -293,8 +291,8 @@ export class SentryReplay {
         eventId
       );
 
-      await this.request(endpoint, self.events);
-      self.events = [];
+      await this.request(endpoint, this.instance.events);
+      this.instance.events = [];
       return true;
     } catch (ex) {
       console.error(ex);
