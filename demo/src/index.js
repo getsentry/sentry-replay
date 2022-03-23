@@ -8,10 +8,10 @@ import { SentryReplay } from '@sentry/replay';
 import { BrowserTracing, } from "@sentry/tracing";
 
 Sentry.init({
-  // temp: sentry-test/billy-test
   debug: true,
+  // org/project: sentry-emerging-tech/replays
   dsn:
-    'https://24f526f0cefc4083b2546207a3f6811d@o19635.ingest.sentry.io/5415672',
+    'https://8616b02314c14ca1b499b098e1991eb5@o1176005.ingest.sentry.io/6273278',
   environment: 'demo',
   tracesSampleRate: 1.0,
   integrations: [
