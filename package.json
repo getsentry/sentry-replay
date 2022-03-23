@@ -1,17 +1,17 @@
 {
   "name": "@sentry/replay",
   "version": "0.0.1",
-  "description": "User/session replays for Sentry",
+  "description": "User replays for Sentry",
   "main": "dist/index.js",
   "module": "dist/index.es.js",
   "scripts": {
-    "clean": "yarn rimraf dist",
     "build": "yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
+    "clean": "yarn rimraf dist",
     "lint": "yarn eslint . --ext .js,.jsx,.ts,.tsx",
-    "watch": "yarn build --watch",
+    "prepare": "husky install",
     "start:demo": "yarn build && cd demo && yarn start",
     "test": "yarn jest",
-    "prepare": "husky install"
+    "watch": "yarn build --watch"
   },
   "files": [
     "dist"
@@ -20,7 +20,7 @@
     "type": "git",
     "url": "git+https://github.com/getsentry/sentry-replay.git"
   },
-  "author": "David Cramer",
+  "author": "Sentry.io",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/getsentry/sentry-replay/issues"
