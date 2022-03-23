@@ -74,6 +74,13 @@ export class SentryReplay {
     return isDebugBuild();
   }
 
+  /**
+   * Get integration's instance on the current hub
+   */
+  private get instance() {
+    return Sentry.getCurrentHub().getIntegration(SentryReplay);
+  }
+
   private _getCurrentHub?: () => Hub;
 
   public constructor({
@@ -171,13 +178,6 @@ export class SentryReplay {
       this.visibilityChangeTimer = null;
     }, VISIBILITY_CHANGE_TIMEOUT);
   };
-
-  /**
-   * Get integration's instance on the current hub
-   */
-  get instance() {
-    return Sentry.getCurrentHub().getIntegration(SentryReplay);
-  }
 
   /**
    * Creates a new replay "session". This will create a new Sentry event and
