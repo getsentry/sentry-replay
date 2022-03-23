@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "module": "dist/index.es.js",
   "scripts": {
+    "bootstrap": "yarn && cd demo && yarn",
     "build": "yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
     "clean": "yarn rimraf dist",
     "lint": "yarn eslint . --ext .js,.jsx,.ts,.tsx",
