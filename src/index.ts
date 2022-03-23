@@ -19,7 +19,7 @@ export class SentryReplay {
   /**
    * @inheritDoc
    */
-  public static id = 'SentryReplay';
+  public static id = 'Replay';
 
   /**
    * @inheritDoc
@@ -70,7 +70,9 @@ export class SentryReplay {
     }/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
   }
 
-  private isDebug: boolean;
+  private get isDebug(): boolean {
+    return isDebugBuild();
+  }
 
   private _getCurrentHub?: () => Hub;
 
@@ -82,7 +84,6 @@ export class SentryReplay {
       ...rrwebRecordOptions
     } = {},
   }: SentryReplayConfiguration = {}) {
-    this.isDebug = isDebugBuild();
     this.rrwebRecordOptions = {
       checkoutEveryNms,
       maskAllInputs,
@@ -120,7 +121,8 @@ export class SentryReplay {
         // Set timer to send attachment to Sentry, will be cancelled if an
         // event happens before `idleTimeout` elapses
         this.timeout = window.setTimeout(() => {
-          logger.log('[replay] rrweb timeout hit, finishing replay event');
+          this.isDebug &&
+            logger.log('[Replay] rrweb timeout hit, finishing replay event');
           this.finishReplayEvent();
         }, idleTimeout);
         // TODO:
@@ -152,7 +154,10 @@ export class SentryReplay {
       // ms have elapsed, which means we will consider this a new session
       //
       // TBD if this is the behavior we want
-      logger.log('[replay] document has become active, creating new "session"');
+      this.isDebug &&
+        logger.log(
+          '[Replay] document has become active, creating new "session"'
+        );
       this.triggerNewSession();
       return;
     }
@@ -179,7 +184,7 @@ export class SentryReplay {
    * then trigger rrweb to take a full snapshot.
    */
   triggerNewSession() {
-    logger.log('[replay] taking full rrweb snapshot');
+    this.isDebug && logger.log('[Replay] taking full rrweb snapshot');
     record.takeFullSnapshot(true);
   }
 
@@ -191,7 +196,7 @@ export class SentryReplay {
   createRootEvent() {
     if (!this.instance) return;
 
-    logger.log(`[replay] creating root replay event`);
+    this.isDebug && logger.log(`[Replay] creating root replay event`);
     // Create a transaction to attach event to
     const transaction = Sentry.getCurrentHub().startTransaction({
       name: 'sentry-replay',
@@ -210,7 +215,7 @@ export class SentryReplay {
   }
 
   createReplayEvent() {
-    logger.log(`[replay] creating child replay event`);
+    this.isDebug && logger.log(`[Replay] creating child replay event`);
     this.replayEvent = Sentry.startTransaction({
       name: 'sentry-replay-event',
       tags: {
@@ -223,7 +228,7 @@ export class SentryReplay {
   }
 
   finishReplayEvent() {
-    logger.log(`[replay] finish replay event`);
+    this.isDebug && logger.log(`[Replay] finish replay event`);
     if (!this.instance) return;
 
     const eventId = this.instance.eventId || this.createRootEvent();
@@ -260,13 +265,14 @@ export class SentryReplay {
 
     // If sendBeacon is supported and payload is smol enough...
     if (this.hasSendBeacon() && stringifiedPayload.length <= 65536) {
-      logger.log(`[replay] uploading attachment via sendBeacon()`);
+      this.isDebug &&
+        logger.log(`[Replay] uploading attachment via sendBeacon()`);
       window.navigator.sendBeacon(endpoint, formData);
       return;
     }
 
     try {
-      logger.log(`[replay] uploading attachment via fetch()`);
+      this.isDebug && logger.log(`[Replay] uploading attachment via fetch()`);
       // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
       await fetch(endpoint, {
         method: 'POST',
