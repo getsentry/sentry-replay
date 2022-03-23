@@ -3,13 +3,6 @@ import './App.css';
 
 function App() {
   const [state, setState] = React.useState(0);
-  // React.useEffect(() => {
-    // const id = window.setInterval(async () => {
-      // try {
-      // setState(state + 1);
-      // } catch {}
-    // }, 5000);
-  // })
   React.useEffect(() => {
     const id = window.setInterval(async () => {
       try {
