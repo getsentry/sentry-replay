@@ -63,6 +63,8 @@ export class SentryReplay {
    */
   private visibilityChangeTimer: number | null;
 
+  private performanceObserver: PerformanceObserver | null = null;
+
   private static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
     const { host, path, projectId, port, protocol, user } = dsn;
     return `${protocol}://${host}${port !== '' ? `:${port}` : ''}${
@@ -150,6 +152,19 @@ export class SentryReplay {
 
   private addListeners() {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
+
+    if ('PerformanceObserver' in window) {
+      this.performanceObserver = new PerformanceObserver(
+        this.handlePerformanceObserver
+      );
+    }
+  }
+
+  private handlePerformanceObserver(
+    list: PerformanceObserverEntryList,
+    observer: PerformanceObserver
+  ) {
+    console.log('PerformanceObserver', { list, observer });
   }
 
   handleVisibilityChange = () => {
@@ -201,7 +216,7 @@ export class SentryReplay {
     const transaction = Sentry.getCurrentHub().startTransaction({
       name: 'sentry-replay',
       tags: {
-        hasReplay: true,
+        hasReplay: 'yes',
         replayId: this.replayId,
       },
     });
