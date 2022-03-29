@@ -136,16 +136,16 @@ export class SentryReplay {
   }
 
   setupOnce() {
-    // XXX: this needs to be in `setupOnce` vs `constructor`, otherwise SDK is
-    // not fully initialized and the event will not get properly sent to Sentry
-    this.createReplayEvent();
-
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
     Sentry.addGlobalEventProcessor((event) => {
       event.tags = { ...event.tags, replayId: this.replayId };
       return event;
     });
+
+    // XXX: this needs to be in `setupOnce` vs `constructor`, otherwise SDK is
+    // not fully initialized and the event will not get properly sent to Sentry
+    this.createReplayEvent();
   }
 
   private addListeners() {
