@@ -4,6 +4,7 @@ import { isDebugBuild, logger, uuid4 } from '@sentry/utils';
 
 import { record } from 'rrweb';
 import type { eventWithTime } from 'rrweb/typings/types';
+import { createPerformanceEntries } from './createPerformanceEntry';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
@@ -30,6 +31,8 @@ export class SentryReplay {
    * Buffer of rrweb events that will be serialized as JSON and saved as an attachment to a Sentry event
    */
   public events: RRWebEvent[] = [];
+
+  public performanceEvents: any[] = [];
 
   /**
    * The id of the root Sentry event that all attachments will be saved to
@@ -152,15 +155,20 @@ export class SentryReplay {
       this.performanceObserver = new PerformanceObserver(
         this.handlePerformanceObserver
       );
+
+      // Observe everything for now
+      this.performanceObserver.observe({
+        entryTypes: [...PerformanceObserver.supportedEntryTypes],
+      });
     }
   }
 
-  private handlePerformanceObserver(
-    list: PerformanceObserverEntryList,
-    observer: PerformanceObserver
-  ) {
-    console.log('PerformanceObserver', { list, observer });
-  }
+  handlePerformanceObserver = (
+    list: PerformanceObserverEntryList
+    // observer: PerformanceObserver
+  ) => {
+    this.performanceEvents = [...this.performanceEvents, ...list.getEntries()];
+  };
 
   handleVisibilityChange = () => {
     if (
@@ -182,7 +190,7 @@ export class SentryReplay {
     // Send replay when the page/tab becomes hidden
     this.finishReplayEvent();
 
-    // VISIBILITY_CHANGE_TIMEOUT gives the user buffer room it come back to the
+    // VISIBILITY_CHANGE_TIMEOUT gives the user buffer room to come back to the
     // page before we create a new session.
     this.visibilityChangeTimer = window.setTimeout(() => {
       this.visibilityChangeTimer = null;
@@ -248,9 +256,36 @@ export class SentryReplay {
 
     this.sendReplay(eventId);
 
+    // include performance entries
+    this.attachPerformanceEntries();
+
     // Close out existing replay event and create a new one
-    this.replayEvent?.finish();
+    this.replayEvent?.setStatus('ok');
     this.createReplayEvent();
+  }
+
+  createPerformanceSpans(entries: any[]) {
+    entries.forEach(({ type, start, end, name, transferSize }) => {
+      const span = this.replayEvent?.startChild({
+        op: type,
+        description: name,
+        startTimestamp: start,
+        data: {
+          transferSize,
+        },
+      });
+      span.finish(end);
+    });
+  }
+
+  attachPerformanceEntries() {
+    // Copy and reset entries before processing
+    const entries = [...this.performanceEvents];
+    this.performanceEvents = [];
+
+    // TODO: Attach performance entries
+    const entryEvents = createPerformanceEntries(entries);
+    this.createPerformanceSpans(entryEvents);
   }
 
   /**
