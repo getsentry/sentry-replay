@@ -1,5 +1,44 @@
+type EntryType =
+  | 'element'
+  | 'navigation'
+  | 'resource'
+  | 'mark'
+  | 'measure'
+  | 'paint'
+  | 'longtask';
+
+export interface ReplayPerformanceEntry {
+  /**
+   * One of these types https://developer.mozilla.org/en-US/docs/Web/API/PerformanceEntry/entryType
+   */
+  type: string;
+
+  /**
+   * A more specific description of the performance entry
+   */
+  name: string;
+
+  /**
+   * The start timestamp in seconds
+   */
+  start: number;
+
+  /**
+   * The end timestamp in seconds
+   */
+  end: number;
+
+  /**
+   * Additional unstructured data to be included
+   */
+  data?: Record<string, any>;
+}
+
 // Map entryType -> function to normalize data for event
-const ENTRY_TYPES: Record<string, (entry: PerformanceEntry) => any> = {
+const ENTRY_TYPES: Record<
+  string,
+  (entry: PerformanceEntry) => ReplayPerformanceEntry
+> = {
   resource: createResourceEntry,
   paint: createPaintEntry,
   navigation: createNavigationEntry,
@@ -82,8 +121,10 @@ function createNavigationEntry(entry: PerformanceNavigationTiming) {
     type: `${entryType}.${type}`,
     start: getAbsoluteTime(startTime),
     end: getAbsoluteTime(domComplete),
-    transferSize,
     name,
+    data: {
+      size: transferSize,
+    },
   };
 }
 function createResourceEntry(entry: PerformanceResourceTiming) {
@@ -125,8 +166,10 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
     type: `${entryType}.${initiatorType}`,
     start: getAbsoluteTime(startTime),
     end: getAbsoluteTime(responseEnd),
-    transferSize,
     name,
+    data: {
+      size: transferSize,
+    },
   };
 }
 
@@ -153,6 +196,8 @@ function createLargestContentfulPaint(
     name: entryType,
     start,
     end: start + duration,
-    size,
+    data: {
+      size,
+    },
   };
 }

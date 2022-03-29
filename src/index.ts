@@ -4,7 +4,10 @@ import { isDebugBuild, logger, uuid4 } from '@sentry/utils';
 
 import { record } from 'rrweb';
 import type { eventWithTime } from 'rrweb/typings/types';
-import { createPerformanceEntries } from './createPerformanceEntry';
+import {
+  createPerformanceEntries,
+  ReplayPerformanceEntry,
+} from './createPerformanceEntry';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
@@ -215,6 +218,7 @@ export class SentryReplay {
     if (!this.instance) return;
 
     this.isDebug && logger.log(`[Replay] creating root replay event`);
+
     // Create a transaction to attach event to
     const transaction = Sentry.getCurrentHub().startTransaction({
       name: 'sentry-replay',
@@ -244,6 +248,37 @@ export class SentryReplay {
     return this.replayEvent;
   }
 
+  /**
+   * Create a span for each performance entry. The parent transaction is `this.replayEvent`.
+   */
+  createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
+    entries.forEach(({ type, start, end, name, data }) => {
+      const span = this.replayEvent?.startChild({
+        op: type,
+        description: name,
+        startTimestamp: start,
+        data,
+      });
+      span.finish(end);
+    });
+  }
+
+  /**
+   * Observed performance metrics are added to `this.performanceEvents`. These
+   * are included in the replay event before it is finished and sent to Sentry.
+   */
+  addPerformanceEntries() {
+    // Copy and reset entries before processing
+    const entries = [...this.performanceEvents];
+    this.performanceEvents = [];
+
+    // Parse the entries
+    const entryEvents = createPerformanceEntries(entries);
+
+    // This current implementation is to create spans on the transaction referenced in `this.replayEvent`
+    this.createPerformanceSpans(entryEvents);
+  }
+
   finishReplayEvent() {
     if (!this.instance) return;
 
@@ -257,35 +292,11 @@ export class SentryReplay {
     this.sendReplay(eventId);
 
     // include performance entries
-    this.attachPerformanceEntries();
+    this.addPerformanceEntries();
 
     // Close out existing replay event and create a new one
     this.replayEvent?.setStatus('ok').finish();
     this.createReplayEvent();
-  }
-
-  createPerformanceSpans(entries: any[]) {
-    entries.forEach(({ type, start, end, name, transferSize }) => {
-      const span = this.replayEvent?.startChild({
-        op: type,
-        description: name,
-        startTimestamp: start,
-        data: {
-          transferSize,
-        },
-      });
-      span.finish(end);
-    });
-  }
-
-  attachPerformanceEntries() {
-    // Copy and reset entries before processing
-    const entries = [...this.performanceEvents];
-    this.performanceEvents = [];
-
-    // TODO: Attach performance entries
-    const entryEvents = createPerformanceEntries(entries);
-    this.createPerformanceSpans(entryEvents);
   }
 
   /**
