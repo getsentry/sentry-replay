@@ -83,18 +83,11 @@ export class SentryReplay {
     return Sentry.getCurrentHub().getIntegration(SentryReplay);
   }
 
-  private _getCurrentHub?: () => Hub;
-
   public constructor({
     idleTimeout = 15000,
-    rrwebConfig: {
-      checkoutEveryNms = 5 * 60 * 1000, // default checkout time of 5 minutes
-      maskAllInputs = true,
-      ...rrwebRecordOptions
-    } = {},
+    rrwebConfig: { maskAllInputs = true, ...rrwebRecordOptions } = {},
   }: SentryReplayConfiguration = {}) {
     this.rrwebRecordOptions = {
-      checkoutEveryNms,
       maskAllInputs,
       ...rrwebRecordOptions,
     };
@@ -102,7 +95,6 @@ export class SentryReplay {
     // Creates a new replay ID everytime we initialize the plugin (e.g. on every pageload).
     // TBD on behavior here (e.g. should this be saved to localStorage/cookies)
     this.replayId = uuid4();
-    this.createReplayEvent();
     this.events = [];
 
     record({
@@ -134,7 +126,6 @@ export class SentryReplay {
             logger.log('[Replay] rrweb timeout hit, finishing replay event');
           this.finishReplayEvent();
         }, idleTimeout);
-        // TODO:
       },
     });
 
@@ -142,6 +133,10 @@ export class SentryReplay {
   }
 
   setupOnce() {
+    // XXX: this needs to be in `setupOnce` vs `constructor`, otherwise SDK is
+    // not fully initialized and the event will not get properly sent to Sentry
+    this.createReplayEvent();
+
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
     Sentry.addGlobalEventProcessor((event) => {
@@ -230,7 +225,6 @@ export class SentryReplay {
   }
 
   createReplayEvent() {
-    this.isDebug && logger.log(`[Replay] creating child replay event`);
     this.replayEvent = Sentry.startTransaction({
       name: 'sentry-replay-event',
       tags: {
@@ -243,7 +237,6 @@ export class SentryReplay {
   }
 
   finishReplayEvent() {
-    this.isDebug && logger.log(`[Replay] finish replay event`);
     if (!this.instance) return;
 
     const eventId = this.instance.eventId || this.createRootEvent();
