@@ -260,7 +260,7 @@ export class SentryReplay {
     this.attachPerformanceEntries();
 
     // Close out existing replay event and create a new one
-    this.replayEvent?.setStatus('ok');
+    this.replayEvent?.setStatus('ok').finish();
     this.createReplayEvent();
   }
 
