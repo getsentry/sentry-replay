@@ -222,7 +222,8 @@ export class SentryReplay {
    * explicitly defined yet).
    */
   createRootEvent() {
-    if (!this.instance) return;
+    // TODO: Figure out if we need to do this, when this gets called from `setupOnce`, `this.instance` is still undefined.
+    // if (!this.instance) return;
 
     this.isDebug && logger.log(`[Replay] creating root replay event`);
 
@@ -238,9 +239,9 @@ export class SentryReplay {
     // We have to finish the transaction to get an event ID to be able to
     // upload an attachment for that event
     // @ts-expect-error This returns an eventId (string), but is not typed as such
-    this.instance.eventId = transaction.finish();
+    this.eventId = transaction.finish();
 
-    return this.instance.eventId;
+    return this.eventId;
   }
 
   /**
@@ -249,6 +250,7 @@ export class SentryReplay {
    * replay event.
    **/
   createReplayEvent() {
+    console.log('createReplayEvent rootReplayId', this.eventId);
     this.replayEvent = Sentry.startTransaction({
       name: 'sentry-replay-event',
       tags: {
@@ -292,9 +294,9 @@ export class SentryReplay {
   }
 
   finishReplayEvent() {
-    if (!this.instance) return;
+    // if (!this.instance) return;
 
-    const eventId = this.instance.eventId || this.createRootEvent();
+    const eventId = this.eventId || this.createRootEvent();
 
     if (!eventId) {
       console.error('[Sentry]: No transaction, no replay');
@@ -357,11 +359,11 @@ export class SentryReplay {
    * Finalize and send the current replay event to Sentry
    */
   async sendReplay(eventId: string) {
-    if (!this.instance) return;
+    // if (!this.instance) return;
 
     try {
       // short circuit if theres no events to replay
-      if (!this.instance.events.length) return;
+      if (!this.events.length) return;
 
       const client = Sentry.getCurrentHub().getClient();
       const endpoint = SentryReplay.attachmentUrlFromDsn(
@@ -369,8 +371,8 @@ export class SentryReplay {
         eventId
       );
 
-      await this.sendReplayRequest(endpoint, this.instance.events);
-      this.instance.events = [];
+      await this.sendReplayRequest(endpoint, this.events);
+      this.events = [];
       return true;
     } catch (ex) {
       console.error(ex);
