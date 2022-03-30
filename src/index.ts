@@ -35,7 +35,7 @@ export class SentryReplay {
    */
   public events: RRWebEvent[] = [];
 
-  public performanceEvents: any[] = [];
+  public performanceEvents: PerformanceEntry[] = [];
 
   /**
    * The id of the root Sentry event that all attachments will be saved to
@@ -120,7 +120,6 @@ export class SentryReplay {
         // Always create a new Sentry event on checkouts and clear existing rrweb events
         if (isCheckout) {
           console.log('$$$$$ IS CHECKOUT');
-          this.createRootEvent();
           this.events = [event];
         } else {
           this.events.push(event);
@@ -149,6 +148,7 @@ export class SentryReplay {
 
     // XXX: this needs to be in `setupOnce` vs `constructor`, otherwise SDK is
     // not fully initialized and the event will not get properly sent to Sentry
+    this.createRootEvent();
     this.createReplayEvent();
   }
 
