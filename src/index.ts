@@ -119,6 +119,7 @@ export class SentryReplay {
 
         // Always create a new Sentry event on checkouts and clear existing rrweb events
         if (isCheckout) {
+          console.log('$$$$$ IS CHECKOUT');
           this.createRootEvent();
           this.events = [event];
         } else {
@@ -166,6 +167,9 @@ export class SentryReplay {
     }
   }
 
+  /**
+   * Keep a list of performance entries that will be sent with a replay
+   */
   handlePerformanceObserver = (
     list: PerformanceObserverEntryList
     // observer: PerformanceObserver
@@ -173,6 +177,9 @@ export class SentryReplay {
     this.performanceEvents = [...this.performanceEvents, ...list.getEntries()];
   };
 
+  /**
+   * Handle when visibility of the page changes. (e.g. new tab is opened)
+   */
   handleVisibilityChange = () => {
     if (
       document.visibilityState === 'visible' &&
@@ -236,6 +243,11 @@ export class SentryReplay {
     return this.instance.eventId;
   }
 
+  /**
+   * This is our pseudo replay event disguised as a transaction. It will be
+   * used to store performance entries and breadcrumbs for every incremental
+   * replay event.
+   **/
   createReplayEvent() {
     this.replayEvent = Sentry.startTransaction({
       name: 'sentry-replay-event',
@@ -264,7 +276,7 @@ export class SentryReplay {
   }
 
   /**
-   * Observed performance metrics are added to `this.performanceEvents`. These
+   * Observed performance events are added to `this.performanceEvents`. These
    * are included in the replay event before it is finished and sent to Sentry.
    */
   addPerformanceEntries() {
@@ -306,7 +318,10 @@ export class SentryReplay {
     return 'navigator' in window && 'sendBeacon' in window.navigator;
   }
 
-  async request(endpoint: string, events: RRWebEvent[]) {
+  /**
+   * Send replay attachment using either `sendBeacon()` or `fetch()`
+   */
+  async sendReplayRequest(endpoint: string, events: RRWebEvent[]) {
     const stringifiedPayload = JSON.stringify({ events });
     const formData = new FormData();
     formData.append(
@@ -338,6 +353,9 @@ export class SentryReplay {
     }
   }
 
+  /**
+   * Finalize and send the current replay event to Sentry
+   */
   async sendReplay(eventId: string) {
     if (!this.instance) return;
 
@@ -351,7 +369,7 @@ export class SentryReplay {
         eventId
       );
 
-      await this.request(endpoint, this.instance.events);
+      await this.sendReplayRequest(endpoint, this.instance.events);
       this.instance.events = [];
       return true;
     } catch (ex) {
