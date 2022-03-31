@@ -17,7 +17,6 @@ describe('config', () => {
         "calls": Array [
           Array [
             Object {
-              "checkoutEveryNms": 300000,
               "emit": [Function],
               "maskAllInputs": true,
             },
@@ -46,7 +45,6 @@ describe('config', () => {
         "calls": Array [
           Array [
             Object {
-              "checkoutEveryNms": 300000,
               "emit": [Function],
               "ignoreClass": "test",
               "maskAllInputs": false,

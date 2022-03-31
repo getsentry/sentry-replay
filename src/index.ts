@@ -4,6 +4,10 @@ import { isDebugBuild, logger, uuid4 } from '@sentry/utils';
 
 import { record } from 'rrweb';
 import type { eventWithTime } from 'rrweb/typings/types';
+import {
+  createPerformanceEntries,
+  ReplayPerformanceEntry,
+} from './createPerformanceEntry';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
@@ -30,6 +34,8 @@ export class SentryReplay {
    * Buffer of rrweb events that will be serialized as JSON and saved as an attachment to a Sentry event
    */
   public events: RRWebEvent[] = [];
+
+  public performanceEvents: PerformanceEntry[] = [];
 
   /**
    * The id of the root Sentry event that all attachments will be saved to
@@ -63,6 +69,8 @@ export class SentryReplay {
    */
   private visibilityChangeTimer: number | null;
 
+  private performanceObserver: PerformanceObserver | null = null;
+
   private static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
     const { host, path, projectId, port, protocol, user } = dsn;
     return `${protocol}://${host}${port !== '' ? `:${port}` : ''}${
@@ -81,18 +89,11 @@ export class SentryReplay {
     return Sentry.getCurrentHub().getIntegration(SentryReplay);
   }
 
-  private _getCurrentHub?: () => Hub;
-
   public constructor({
     idleTimeout = 15000,
-    rrwebConfig: {
-      checkoutEveryNms = 5 * 60 * 1000, // default checkout time of 5 minutes
-      maskAllInputs = true,
-      ...rrwebRecordOptions
-    } = {},
+    rrwebConfig: { maskAllInputs = true, ...rrwebRecordOptions } = {},
   }: SentryReplayConfiguration = {}) {
     this.rrwebRecordOptions = {
-      checkoutEveryNms,
       maskAllInputs,
       ...rrwebRecordOptions,
     };
@@ -100,7 +101,6 @@ export class SentryReplay {
     // Creates a new replay ID everytime we initialize the plugin (e.g. on every pageload).
     // TBD on behavior here (e.g. should this be saved to localStorage/cookies)
     this.replayId = uuid4();
-    this.createReplayEvent();
     this.events = [];
 
     record({
@@ -119,7 +119,7 @@ export class SentryReplay {
 
         // Always create a new Sentry event on checkouts and clear existing rrweb events
         if (isCheckout) {
-          this.createRootEvent();
+          console.log('$$$$$ IS CHECKOUT');
           this.events = [event];
         } else {
           this.events.push(event);
@@ -132,7 +132,6 @@ export class SentryReplay {
             logger.log('[Replay] rrweb timeout hit, finishing replay event');
           this.finishReplayEvent();
         }, idleTimeout);
-        // TODO:
       },
     });
 
@@ -146,12 +145,41 @@ export class SentryReplay {
       event.tags = { ...event.tags, replayId: this.replayId };
       return event;
     });
+
+    // XXX: this needs to be in `setupOnce` vs `constructor`, otherwise SDK is
+    // not fully initialized and the event will not get properly sent to Sentry
+    this.createRootEvent();
+    this.createReplayEvent();
   }
 
   private addListeners() {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
+
+    if ('PerformanceObserver' in window) {
+      this.performanceObserver = new PerformanceObserver(
+        this.handlePerformanceObserver
+      );
+
+      // Observe everything for now
+      this.performanceObserver.observe({
+        entryTypes: [...PerformanceObserver.supportedEntryTypes],
+      });
+    }
   }
 
+  /**
+   * Keep a list of performance entries that will be sent with a replay
+   */
+  handlePerformanceObserver = (
+    list: PerformanceObserverEntryList
+    // observer: PerformanceObserver
+  ) => {
+    this.performanceEvents = [...this.performanceEvents, ...list.getEntries()];
+  };
+
+  /**
+   * Handle when visibility of the page changes. (e.g. new tab is opened)
+   */
   handleVisibilityChange = () => {
     if (
       document.visibilityState === 'visible' &&
@@ -172,7 +200,7 @@ export class SentryReplay {
     // Send replay when the page/tab becomes hidden
     this.finishReplayEvent();
 
-    // VISIBILITY_CHANGE_TIMEOUT gives the user buffer room it come back to the
+    // VISIBILITY_CHANGE_TIMEOUT gives the user buffer room to come back to the
     // page before we create a new session.
     this.visibilityChangeTimer = window.setTimeout(() => {
       this.visibilityChangeTimer = null;
@@ -194,14 +222,16 @@ export class SentryReplay {
    * explicitly defined yet).
    */
   createRootEvent() {
-    if (!this.instance) return;
+    // TODO: Figure out if we need to do this, when this gets called from `setupOnce`, `this.instance` is still undefined.
+    // if (!this.instance) return;
 
     this.isDebug && logger.log(`[Replay] creating root replay event`);
+
     // Create a transaction to attach event to
     const transaction = Sentry.getCurrentHub().startTransaction({
       name: 'sentry-replay',
       tags: {
-        hasReplay: true,
+        hasReplay: 'yes',
         replayId: this.replayId,
       },
     });
@@ -209,13 +239,18 @@ export class SentryReplay {
     // We have to finish the transaction to get an event ID to be able to
     // upload an attachment for that event
     // @ts-expect-error This returns an eventId (string), but is not typed as such
-    this.instance.eventId = transaction.finish();
+    this.eventId = transaction.finish();
 
-    return this.instance.eventId;
+    return this.eventId;
   }
 
+  /**
+   * This is our pseudo replay event disguised as a transaction. It will be
+   * used to store performance entries and breadcrumbs for every incremental
+   * replay event.
+   **/
   createReplayEvent() {
-    this.isDebug && logger.log(`[Replay] creating child replay event`);
+    console.log('createReplayEvent rootReplayId', this.eventId);
     this.replayEvent = Sentry.startTransaction({
       name: 'sentry-replay-event',
       tags: {
@@ -227,11 +262,41 @@ export class SentryReplay {
     return this.replayEvent;
   }
 
-  finishReplayEvent() {
-    this.isDebug && logger.log(`[Replay] finish replay event`);
-    if (!this.instance) return;
+  /**
+   * Create a span for each performance entry. The parent transaction is `this.replayEvent`.
+   */
+  createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
+    entries.forEach(({ type, start, end, name, data }) => {
+      const span = this.replayEvent?.startChild({
+        op: type,
+        description: name,
+        startTimestamp: start,
+        data,
+      });
+      span.finish(end);
+    });
+  }
 
-    const eventId = this.instance.eventId || this.createRootEvent();
+  /**
+   * Observed performance events are added to `this.performanceEvents`. These
+   * are included in the replay event before it is finished and sent to Sentry.
+   */
+  addPerformanceEntries() {
+    // Copy and reset entries before processing
+    const entries = [...this.performanceEvents];
+    this.performanceEvents = [];
+
+    // Parse the entries
+    const entryEvents = createPerformanceEntries(entries);
+
+    // This current implementation is to create spans on the transaction referenced in `this.replayEvent`
+    this.createPerformanceSpans(entryEvents);
+  }
+
+  finishReplayEvent() {
+    // if (!this.instance) return;
+
+    const eventId = this.eventId || this.createRootEvent();
 
     if (!eventId) {
       console.error('[Sentry]: No transaction, no replay');
@@ -240,8 +305,11 @@ export class SentryReplay {
 
     this.sendReplay(eventId);
 
+    // include performance entries
+    this.addPerformanceEntries();
+
     // Close out existing replay event and create a new one
-    this.replayEvent?.finish();
+    this.replayEvent?.setStatus('ok').finish();
     this.createReplayEvent();
   }
 
@@ -252,7 +320,10 @@ export class SentryReplay {
     return 'navigator' in window && 'sendBeacon' in window.navigator;
   }
 
-  async request(endpoint: string, events: RRWebEvent[]) {
+  /**
+   * Send replay attachment using either `sendBeacon()` or `fetch()`
+   */
+  async sendReplayRequest(endpoint: string, events: RRWebEvent[]) {
     const stringifiedPayload = JSON.stringify({ events });
     const formData = new FormData();
     formData.append(
@@ -284,12 +355,15 @@ export class SentryReplay {
     }
   }
 
+  /**
+   * Finalize and send the current replay event to Sentry
+   */
   async sendReplay(eventId: string) {
-    if (!this.instance) return;
+    // if (!this.instance) return;
 
     try {
       // short circuit if theres no events to replay
-      if (!this.instance.events.length) return;
+      if (!this.events.length) return;
 
       const client = Sentry.getCurrentHub().getClient();
       const endpoint = SentryReplay.attachmentUrlFromDsn(
@@ -297,8 +371,8 @@ export class SentryReplay {
         eventId
       );
 
-      await this.request(endpoint, this.instance.events);
-      this.instance.events = [];
+      await this.sendReplayRequest(endpoint, this.events);
+      this.events = [];
       return true;
     } catch (ex) {
       console.error(ex);
