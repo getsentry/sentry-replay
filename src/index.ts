@@ -9,14 +9,23 @@ import {
 } from './createPerformanceEntry';
 import { ReplaySession } from './session';
 import { getSession } from './session/getSession';
-import { updateSession } from './session/updateSession';
+import { updateSessionActivity } from './session/updateSessionActivity';
 import { logger } from './util/logger';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
 
 interface PluginOptions {
-  idleTimeout?: number;
+  /**
+   * The amount of time to wait before sending a replay
+   */
+  uploadDelay?: number;
+
+  /**
+   * The max amount of time to wait before sending a replay
+   */
+  uploadMaxDelay?: number;
+
   /**
    * If false, will create a new session per pageload
    */
@@ -52,11 +61,6 @@ export class SentryReplay {
   public performanceEvents: PerformanceEntry[] = [];
 
   /**
-   * A unique id per "replay session" (the term is currently not defined yet)
-   */
-  private replayId: string | undefined;
-
-  /**
    * A Sentry Transaction that should capture every incremental rrweb update,
    * but *not* the attachments themselves. This is currently used to capture
    * breadcrumbs and maybe other spans (e.g. network requests)
@@ -74,6 +78,12 @@ export class SentryReplay {
    * setTimeout id used for debouncing sending rrweb attachments
    */
   private timeout: number;
+
+  /**
+   * The timestamp of the first event since the last flush.
+   * This is used to determine if the maximum allowed time has passed before we should flush events again.
+   */
+  private initialEventTimestampSinceFlush: number | null = null;
 
   private performanceObserver: PerformanceObserver | null = null;
 
@@ -94,7 +104,8 @@ export class SentryReplay {
   }
 
   public constructor({
-    idleTimeout = 15000,
+    uploadDelay = 5000,
+    uploadMaxDelay = 15000,
     stickySession = false, // TBD: Making this opt-in for now
     rrwebConfig: { maskAllInputs = true, ...rrwebRecordOptions } = {},
   }: SentryReplayConfiguration = {}) {
@@ -103,7 +114,7 @@ export class SentryReplay {
       ...rrwebRecordOptions,
     };
 
-    this.options = { idleTimeout, stickySession };
+    this.options = { uploadDelay, uploadMaxDelay, stickySession };
     this.events = [];
   }
 
@@ -125,35 +136,49 @@ export class SentryReplay {
     record({
       ...this.rrwebRecordOptions,
       emit: (event: RRWebEvent, isCheckout?: boolean) => {
-        // "debounce" by `idleTimeout`, how often we save replay events i.e. we
-        // will save events only if 15 seconds have elapsed since the last
-        // event
-        //
-        // TODO: We probably want to have a hard timeout where we save
-        // so that it does not grow infinitely and we never have a replay
-        // saved
-        if (this.timeout) {
+        // We want to batch uploads of replay events. Save events only if
+        // `<uploadDelay>` milliseconds have elapsed since the last event
+        // *OR* if `<uploadMaxDelay>` milliseconds have elapsed.
+
+        const now = new Date().getTime();
+
+        // Timestamp of the first replay event since the last flush, this gets
+        // reset when we finish the replay event
+        if (!this.initialEventTimestampSinceFlush) {
+          this.initialEventTimestampSinceFlush = now;
+        }
+
+        const uploadMaxDelayExceeded =
+          this.initialEventTimestampSinceFlush + this.options.uploadMaxDelay >=
+          now;
+
+        // Do not finish the replay event if we receive a new replay event
+        // unless `<uploadMaxDelay>` ms have elapsed since the last time we
+        // finished the replay
+        if (this.timeout && !uploadMaxDelayExceeded) {
           window.clearTimeout(this.timeout);
         }
 
-        // Always create a new Sentry event on checkouts and clear existing rrweb events
+        // We need to clear existing events on a checkout, otherwise they are
+        // incremental event updates and should be appended
         if (isCheckout) {
           this.events = [event];
         } else {
           this.events.push(event);
         }
 
-        // Set timer to send attachment to Sentry, will be cancelled if an
-        // event happens before `idleTimeout` elapses
+        // Set timer to finish replay event and send replay attachment to
+        // Sentry. Will be cancelled if an event happens before `uploadDelay`
+        // elapses.
         this.timeout = window.setTimeout(() => {
           logger.log('rrweb timeout hit, finishing replay event');
           this.finishReplayEvent();
 
           // Update with current timestamp as the last session activity
-          updateSession(this.session, {
+          updateSessionActivity({
             stickySession: this.options.stickySession,
           });
-        }, this.options.idleTimeout);
+        }, this.options.uploadDelay);
       },
     });
 
@@ -294,6 +319,7 @@ export class SentryReplay {
     }
 
     this.sendReplay(session.id);
+    this.initialEventTimestampSinceFlush = null;
 
     // include performance entries
     this.addPerformanceEntries();
