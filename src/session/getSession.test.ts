@@ -3,19 +3,7 @@ import * as FetchSession from './fetchSession';
 import { getSession } from './getSession';
 import { saveSession } from './saveSession';
 
-jest.mock('@sentry/browser', () => {
-  const startTransaction = jest.fn(() => ({
-    finish: jest.fn(() => 'transaction_id'),
-  }));
-  const getCurrentHub = jest.fn(() => ({
-    startTransaction,
-  }));
-  return {
-    getCurrentHub,
-  };
-});
-
-// jest.mock('./createSession');
+jest.mock('@sentry/browser');
 
 beforeAll(() => {
   jest.spyOn(CreateSession, 'createSession');

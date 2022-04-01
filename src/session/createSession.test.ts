@@ -3,18 +3,7 @@ import * as Sentry from '@sentry/browser';
 import { createSession } from './createSession';
 import { saveSession } from './saveSession';
 
-jest.mock('@sentry/browser', () => {
-  const startTransaction = jest.fn(() => ({
-    finish: jest.fn(() => 'transaction_id'),
-  }));
-  const getCurrentHub = jest.fn(() => ({
-    startTransaction,
-  }));
-  return {
-    getCurrentHub,
-  };
-});
-
+jest.mock('@sentry/browser');
 jest.mock('./saveSession');
 
 beforeAll(() => {
