@@ -165,12 +165,14 @@ export class SentryReplay {
   }
 
   getOrCreateSession({ expiry }: { expiry: number }) {
-    this.session = getSession({
+    const { isNew, ...session } = getSession({
       expiry,
       stickySession: this.options.stickySession,
     });
 
-    return this.session;
+    this.session = session;
+
+    return { isNew, ...session };
   }
 
   addListeners() {

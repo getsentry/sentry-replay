@@ -6,7 +6,7 @@ import type { ReplaySession } from './types';
 
 interface CreateSessionParams {
   /**
-   * Should stickySession to localStorage?
+   * Should save to sessionStorage?
    */
   stickySession: boolean;
 }
@@ -46,6 +46,6 @@ export function createSession({
     saveSession(session);
   }
 
-  // Don't save `isNew` in localStorage
+  // Don't save `isNew` in sessionStorage
   return { ...session, isNew: true };
 }
