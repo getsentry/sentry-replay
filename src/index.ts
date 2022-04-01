@@ -10,6 +10,7 @@ import {
 import { ReplaySession } from './session';
 import { getSession } from './session/getSession';
 import { updateSessionActivity } from './session/updateSessionActivity';
+import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 
 type RRWebEvent = eventWithTime;
@@ -119,7 +120,7 @@ export class SentryReplay {
   }
 
   setupOnce() {
-    this.getOrCreateSession({ expiry: SESSION_IDLE_DURATION });
+    this.loadSession({ expiry: SESSION_IDLE_DURATION });
 
     // If there is no session, then something bad has happened - can't continue
     if (!this.session) {
@@ -149,7 +150,7 @@ export class SentryReplay {
         }
 
         const uploadMaxDelayExceeded =
-          this.initialEventTimestampSinceFlush + this.options.uploadMaxDelay >=
+          this.initialEventTimestampSinceFlush + this.options.uploadMaxDelay <=
           now;
 
         // Do not finish the replay event if we receive a new replay event
@@ -167,17 +168,23 @@ export class SentryReplay {
           this.events.push(event);
         }
 
+        // This event type is a fullsnapshot, we should save immediately when this occurs
+        // See https://github.com/rrweb-io/rrweb/blob/d8f9290ca496712aa1e7d472549480c4e7876594/packages/rrweb/src/types.ts#L16
+        if (event.type === 2) {
+          // A fullsnapshot happens on initial load and if we need to start a
+          // new replay due to idle timeout. In the later case we will need to
+          // create a new session before finishing the replay.
+          this.loadSession({ expiry: SESSION_IDLE_DURATION });
+          this.finishReplayEvent();
+          return;
+        }
+
         // Set timer to finish replay event and send replay attachment to
         // Sentry. Will be cancelled if an event happens before `uploadDelay`
         // elapses.
         this.timeout = window.setTimeout(() => {
           logger.log('rrweb timeout hit, finishing replay event');
           this.finishReplayEvent();
-
-          // Update with current timestamp as the last session activity
-          updateSessionActivity({
-            stickySession: this.options.stickySession,
-          });
         }, this.options.uploadDelay);
       },
     });
@@ -189,15 +196,17 @@ export class SentryReplay {
     this.createReplayEvent();
   }
 
-  getOrCreateSession({ expiry }: { expiry: number }) {
-    const { isNew, ...session } = getSession({
+  /**
+   * Loads a session from storage, or creates a new one
+   */
+  loadSession({ expiry }: { expiry: number }): void {
+    const { isNew: _, ...session } = getSession({
       expiry,
       stickySession: this.options.stickySession,
     });
 
+    // Don't save `isNew` in session member
     this.session = session;
-
-    return { isNew, ...session };
   }
 
   addListeners() {
@@ -229,25 +238,30 @@ export class SentryReplay {
    * Handle when visibility of the page changes. (e.g. new tab is opened)
    */
   handleVisibilityChange = () => {
+    const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
+
+    // Update with current timestamp as the last session activity
+    // Only updating session on visibility change to be conservative about
+    // writing to session storage. This could be changed in the future.
+    updateSessionActivity({
+      stickySession: this.options.stickySession,
+    });
+
     if (document.visibilityState === 'visible') {
       // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
       // ms, we will re-use the existing session, otherwise create a new
       // session
-      const session = this.getOrCreateSession({
-        expiry: VISIBILITY_CHANGE_TIMEOUT,
-      });
-
-      if (session.isNew) {
-        logger.log('Document has become active, creating new session');
+      if (isExpired) {
+        logger.log('Document has become active, but session has expired');
         this.triggerFullSnapshot();
       }
       return;
     }
 
-    // TBD: If user comes back to tab, should we consider that as an activity?
-
-    // Send replay when the page/tab becomes hidden
-    this.finishReplayEvent();
+    // Send replay when the page/tab becomes hidden and session is not expired
+    if (!isExpired) {
+      this.finishReplayEvent();
+    }
   };
 
   /**
@@ -268,6 +282,8 @@ export class SentryReplay {
     logger.log('CreateReplayEvent rootReplayId', this.session.id);
     this.replayEvent = Sentry.startTransaction({
       name: 'sentry-replay-event',
+      parentSpanId: this.session.spanId,
+      traceId: this.session.traceId,
       tags: {
         replayId: this.session.id,
       },
@@ -311,15 +327,26 @@ export class SentryReplay {
     // if (!this.instance) return;
 
     // Ensure that our existing session has not expired
-    const session = this.getOrCreateSession({ expiry: SESSION_IDLE_DURATION });
+    const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
 
-    if (!session.id) {
-      console.error('[Sentry]: No transaction, no replay');
+    if (isExpired) {
+      // TBD: If it is expired, we do not send any events...we could send to
+      // the expired session, but not sure if that's great
+      console.error(
+        new Error('Attempting to finish replay event after session expired.')
+      );
       return;
     }
 
-    this.sendReplay(session.id);
+    if (!this.session.id) {
+      console.error(new Error('[Sentry]: No transaction, no replay'));
+      return;
+    }
+
+    this.sendReplay(this.session.id);
     this.initialEventTimestampSinceFlush = null;
+    // TBD: Alternatively we could update this after every rrweb event
+    this.session.lastActivity = new Date().getTime();
 
     // include performance entries
     this.addPerformanceEntries();

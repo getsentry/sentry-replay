@@ -1,3 +1,4 @@
+import { isSessionExpired } from '@/util/isSessionExpired';
 import { logger } from '@/util/logger';
 import { createSession } from './createSession';
 import { fetchSession } from './fetchSession';
@@ -22,12 +23,12 @@ export function getSession({ expiry, stickySession }: GetSessionParams) {
   if (session) {
     // If there is a session, check if it is valid (e.g. "last activity" time should be within the "session idle time")
     try {
-      const sessionObj = session;
-      const isActive = sessionObj.lastActivity + expiry >= new Date().getTime();
       // TODO: We should probably set a max age on this as well
-      if (isActive) {
-        logger.log(`Using existing session: ${sessionObj.id}`);
-        return sessionObj;
+      const isExpired = isSessionExpired(session, expiry);
+
+      if (!isExpired) {
+        logger.log(`Using existing session: ${session.id}`);
+        return session;
       } else {
         logger.log(`Session has expired`);
       }

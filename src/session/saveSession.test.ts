@@ -12,6 +12,8 @@ afterEach(() => {
 it('saves a valid session', function () {
   const session = {
     id: 'fd09adfc4117477abc8de643e5a5798a',
+    traceId: 'traceId',
+    spanId: 'spanId',
     started: 1648827162630,
     lastActivity: 1648827162658,
   };

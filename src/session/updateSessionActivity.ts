@@ -16,6 +16,8 @@ export function updateSessionActivity({
 
   // If user manually deleted from session storage, create a new session
   if (!existingSession) {
+    // TBD: There was an issue here where sessions weren't saving and this
+    // caused lots of transactions to be created
     return createSession({ stickySession });
   }
 

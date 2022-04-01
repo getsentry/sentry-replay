@@ -38,6 +38,8 @@ export function createSession({
 
   const session = {
     id,
+    spanId: transaction.spanId,
+    traceId: transaction.traceId,
     started: currentDate,
     lastActivity: currentDate,
   };
