@@ -20,9 +20,3 @@ it('session last activity is not older than expiry time', function () {
     false
   ); // Session expires at ts >= 250
 });
-
-it('session is expired when last activity reaches exactly the expiry time', function () {
-  expect(isSessionExpired(createSession({ lastActivity: 100 }), 150, 250)).toBe(
-    true
-  ); // Session expires at ts >= 250
-});

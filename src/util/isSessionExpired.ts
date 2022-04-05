@@ -1,4 +1,5 @@
 import { ReplaySession } from '@/session';
+import { isExpired } from './isExpired';
 
 /**
  * Checks to see if session is expired
@@ -8,5 +9,5 @@ export function isSessionExpired(
   expiry: number,
   targetTime = +new Date()
 ) {
-  return session.lastActivity + expiry <= targetTime;
+  return isExpired(session.lastActivity, expiry, targetTime);
 }

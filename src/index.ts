@@ -10,6 +10,7 @@ import {
 import { ReplaySession } from './session';
 import { getSession } from './session/getSession';
 import { updateSessionActivity } from './session/updateSessionActivity';
+import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 
@@ -149,9 +150,11 @@ export class SentryReplay {
           this.initialEventTimestampSinceFlush = now;
         }
 
-        const uploadMaxDelayExceeded =
-          this.initialEventTimestampSinceFlush + this.options.uploadMaxDelay <=
-          now;
+        const uploadMaxDelayExceeded = isExpired(
+          this.initialEventTimestampSinceFlush,
+          this.options.uploadMaxDelay,
+          now
+        );
 
         // Do not finish the replay event if we receive a new replay event
         // unless `<uploadMaxDelay>` ms have elapsed since the last time we
