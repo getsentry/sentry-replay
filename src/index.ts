@@ -243,12 +243,14 @@ export class SentryReplay {
   handleVisibilityChange = () => {
     const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
 
-    // Update with current timestamp as the last session activity
-    // Only updating session on visibility change to be conservative about
-    // writing to session storage. This could be changed in the future.
-    updateSessionActivity({
-      stickySession: this.options.stickySession,
-    });
+    if (!isExpired) {
+      // Update with current timestamp as the last session activity
+      // Only updating session on visibility change to be conservative about
+      // writing to session storage. This could be changed in the future.
+      updateSessionActivity({
+        stickySession: this.options.stickySession,
+      });
+    }
 
     if (document.visibilityState === 'visible') {
       // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
