@@ -48,6 +48,5 @@ export function createSession({
     saveSession(session);
   }
 
-  // Don't save `isNew` in sessionStorage
-  return { ...session, isNew: true };
+  return session;
 }

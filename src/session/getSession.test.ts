@@ -37,7 +37,6 @@ it('creates a non-sticky session when one does not exist', function () {
     id: 'transaction_id',
     traceId: 'trace_id',
     spanId: 'span_id',
-    isNew: true,
     lastActivity: expect.any(Number),
     started: expect.any(Number),
   });
@@ -69,7 +68,6 @@ it('creates a sticky session when one does not exist', function () {
     id: 'transaction_id',
     traceId: 'trace_id',
     spanId: 'span_id',
-    isNew: true,
     lastActivity: expect.any(Number),
     started: expect.any(Number),
   });
@@ -96,7 +94,6 @@ it('creates a sticky session when one does not exist', function () {
     id: 'transaction_id',
     traceId: 'trace_id',
     spanId: 'span_id',
-    isNew: true,
     lastActivity: expect.any(Number),
     started: expect.any(Number),
   });
@@ -141,7 +138,6 @@ it('fetches an expired sticky session', function () {
   expect(session.id).toBe('transaction_id');
   expect(session.traceId).toBe('trace_id');
   expect(session.spanId).toBe('span_id');
-  expect(session.isNew).toBe(true);
   expect(session.lastActivity).toBeGreaterThanOrEqual(now);
   expect(session.started).toBeGreaterThanOrEqual(now);
 });

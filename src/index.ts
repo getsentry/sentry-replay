@@ -21,7 +21,7 @@ interface PluginOptions {
   /**
    * The amount of time to wait before sending a replay
    */
-  uploadDelay?: number;
+  uploadMinDelay?: number;
 
   /**
    * The max amount of time to wait before sending a replay
@@ -106,7 +106,7 @@ export class SentryReplay {
   }
 
   public constructor({
-    uploadDelay = 5000,
+    uploadMinDelay = 5000,
     uploadMaxDelay = 15000,
     stickySession = false, // TBD: Making this opt-in for now
     rrwebConfig: { maskAllInputs = true, ...rrwebRecordOptions } = {},
@@ -116,7 +116,7 @@ export class SentryReplay {
       ...rrwebRecordOptions,
     };
 
-    this.options = { uploadDelay, uploadMaxDelay, stickySession };
+    this.options = { uploadMinDelay, uploadMaxDelay, stickySession };
     this.events = [];
   }
 
@@ -139,7 +139,7 @@ export class SentryReplay {
       ...this.rrwebRecordOptions,
       emit: (event: RRWebEvent, isCheckout?: boolean) => {
         // We want to batch uploads of replay events. Save events only if
-        // `<uploadDelay>` milliseconds have elapsed since the last event
+        // `<uploadMinDelay>` milliseconds have elapsed since the last event
         // *OR* if `<uploadMaxDelay>` milliseconds have elapsed.
 
         const now = new Date().getTime();
@@ -183,12 +183,12 @@ export class SentryReplay {
         }
 
         // Set timer to finish replay event and send replay attachment to
-        // Sentry. Will be cancelled if an event happens before `uploadDelay`
+        // Sentry. Will be cancelled if an event happens before `uploadMinDelay`
         // elapses.
         this.timeout = window.setTimeout(() => {
           logger.log('rrweb timeout hit, finishing replay event');
           this.finishReplayEvent();
-        }, this.options.uploadDelay);
+        }, this.options.uploadMinDelay);
       },
     });
 
@@ -203,13 +203,10 @@ export class SentryReplay {
    * Loads a session from storage, or creates a new one
    */
   loadSession({ expiry }: { expiry: number }): void {
-    const { isNew: _, ...session } = getSession({
+    this.session = getSession({
       expiry,
       stickySession: this.options.stickySession,
     });
-
-    // Don't save `isNew` in session member
-    this.session = session;
   }
 
   addListeners() {
@@ -243,28 +240,36 @@ export class SentryReplay {
   handleVisibilityChange = () => {
     const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
 
-    if (!isExpired) {
-      // Update with current timestamp as the last session activity
-      // Only updating session on visibility change to be conservative about
-      // writing to session storage. This could be changed in the future.
-      updateSessionActivity({
-        stickySession: this.options.stickySession,
-      });
-    }
-
-    if (document.visibilityState === 'visible') {
-      // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
-      // ms, we will re-use the existing session, otherwise create a new
-      // session
-      if (isExpired) {
+    if (isExpired) {
+      if (document.visibilityState === 'visible') {
+        // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
+        // ms, we will re-use the existing session, otherwise create a new
+        // session
         logger.log('Document has become active, but session has expired');
         this.triggerFullSnapshot();
       }
+      // We definitely want to return if visibilityState is "visible", and I
+      // think we also want to do the same when "hidden", as there shouldn't be
+      // any action to take if user has gone idle for a long period and then
+      // comes back to hide the tab. We don't trigger a full snapshot because
+      // we don't want to start a new session as they immediately have hidden
+      // the tab.
       return;
     }
 
-    // Send replay when the page/tab becomes hidden and session is not expired
-    if (!isExpired) {
+    // Otherwise if session is not expired...
+
+    // Update with current timestamp as the last session activity
+    // Only updating session on visibility change to be conservative about
+    // writing to session storage. This could be changed in the future.
+    updateSessionActivity({
+      stickySession: this.options.stickySession,
+    });
+
+    // Send replay when the page/tab becomes hidden. There is no reason to send
+    // replay if it becomes visible, since no actions we care about were done
+    // while it was hidden
+    if (document.visibilityState !== 'visible') {
       this.finishReplayEvent();
     }
   };

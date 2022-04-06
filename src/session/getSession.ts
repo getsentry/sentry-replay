@@ -22,21 +22,16 @@ export function getSession({ expiry, stickySession }: GetSessionParams) {
 
   if (session) {
     // If there is a session, check if it is valid (e.g. "last activity" time should be within the "session idle time")
-    try {
-      // TODO: We should probably set a max age on this as well
-      const isExpired = isSessionExpired(session, expiry);
+    // TODO: We should probably set a max age on this as well
+    const isExpired = isSessionExpired(session, expiry);
 
-      if (!isExpired) {
-        logger.log(`Using existing session: ${session.id}`);
-        return session;
-      } else {
-        logger.log(`Session has expired`);
-      }
-
-      // Otherwise continue to create a new session
-    } catch {
-      // Invalid session in session storage, ignore and create new session
+    if (!isExpired) {
+      logger.log(`Using existing session: ${session.id}`);
+      return session;
+    } else {
+      logger.log(`Session has expired`);
     }
+    // Otherwise continue to create a new session
   }
 
   const newSession = createSession({ stickySession });
