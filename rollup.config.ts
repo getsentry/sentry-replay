@@ -28,7 +28,7 @@ const config: RollupOptions = {
       preventAssignment: false,
       values: {
         // @ts-expect-error not gonna deal with types here
-        __SENTRY_DEBUG__: false,
+        __SENTRY_DEBUG__: process.env.NODE_ENV === 'development',
       },
     }),
   ],

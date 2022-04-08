@@ -6,13 +6,13 @@
   "module": "dist/index.es.js",
   "scripts": {
     "bootstrap": "yarn && cd demo && yarn",
-    "build": "yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
+    "build": "NODE_ENV=production yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
     "clean": "yarn rimraf dist",
     "lint": "yarn eslint . --ext .js,.jsx,.ts,.tsx",
     "prepare": "husky install",
     "start:demo": "yarn build && cd demo && yarn start",
     "test": "yarn jest",
-    "watch": "yarn build --watch"
+    "watch": "NODE_ENV=development yarn build --watch"
   },
   "files": [
     "dist"
