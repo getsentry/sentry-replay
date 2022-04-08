@@ -8,6 +8,12 @@ import {
   ReplayPerformanceEntry,
 } from './createPerformanceEntry';
 import { ReplaySession } from './session';
+import {
+  REPLAY_EVENT_NAME,
+  ROOT_REPLAY_NAME,
+  SESSION_IDLE_DURATION,
+  VISIBILITY_CHANGE_TIMEOUT,
+} from './session/constants';
 import { getSession } from './session/getSession';
 import { updateSessionActivity } from './session/updateSessionActivity';
 import { isExpired } from './util/isExpired';
@@ -40,9 +46,6 @@ interface SentryReplayConfiguration extends PluginOptions {
    */
   rrwebConfig?: RRWebOptions;
 }
-
-const VISIBILITY_CHANGE_TIMEOUT = 60000; // 1 minute
-const SESSION_IDLE_DURATION = 900000; // 15 minutes
 
 export class SentryReplay {
   /**
@@ -143,6 +146,11 @@ export class SentryReplay {
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
     Sentry.addGlobalEventProcessor((event: Event) => {
+      // Do not apply replayId to the root transaction
+      if (event.transaction === ROOT_REPLAY_NAME) {
+        return event;
+      }
+
       event.tags = { ...event.tags, replayId: this.session.id };
       return event;
     });
@@ -303,7 +311,7 @@ export class SentryReplay {
   createReplayEvent() {
     logger.log('CreateReplayEvent rootReplayId', this.session.id);
     this.replayEvent = Sentry.startTransaction({
-      name: 'sentry-replay-event',
+      name: REPLAY_EVENT_NAME,
       parentSpanId: this.session.spanId,
       traceId: this.session.traceId,
       tags: {
