@@ -129,7 +129,7 @@ export class SentryReplay {
      *
      * So we do this as a workaround to wait for other global event processors to finish
      */
-    setImmediate(this.setup);
+    setImmediate(() => this.setup());
   }
 
   setup() {
