@@ -121,6 +121,18 @@ export class SentryReplay {
   }
 
   setupOnce() {
+    /**
+     * Because we create a transaction in `setupOnce`, we can potentially create a
+     * transaction before some native SDK integrations have run and applied their
+     * own global event processor. An example is:
+     * https://github.com/getsentry/sentry-javascript/blob/b47ceafbdac7f8b99093ce6023726ad4687edc48/packages/browser/src/integrations/useragent.ts
+     *
+     * So we do this as a workaround to wait for other global event processors to finish
+     */
+    setImmediate(this.setup);
+  }
+
+  setup() {
     this.loadSession({ expiry: SESSION_IDLE_DURATION });
 
     // If there is no session, then something bad has happened - can't continue
