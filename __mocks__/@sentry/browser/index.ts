@@ -6,4 +6,13 @@ const startTransaction = jest.fn(() => ({
 const getCurrentHub = jest.fn(() => ({
   startTransaction,
 }));
-export { getCurrentHub };
+
+const addGlobalEventProcessor = jest.fn();
+const configureScope = jest.fn();
+
+export {
+  getCurrentHub,
+  addGlobalEventProcessor,
+  startTransaction,
+  configureScope,
+};
