@@ -435,13 +435,13 @@ export class SentryReplay {
     const events = this.events;
     this.events = [];
 
-    try {
-      const client = Sentry.getCurrentHub().getClient();
-      const endpoint = SentryReplay.attachmentUrlFromDsn(
-        client.getDsn(),
-        eventId
-      );
+    const client = Sentry.getCurrentHub().getClient();
+    const endpoint = SentryReplay.attachmentUrlFromDsn(
+      client.getDsn(),
+      eventId
+    );
 
+    try {
       await this.sendReplayRequest(endpoint, events);
       return true;
     } catch (ex) {
