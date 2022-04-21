@@ -42,7 +42,7 @@ interface PluginOptions {
 
 interface SentryReplayConfiguration extends PluginOptions {
   /**
-   * Options for `rrweb.recordsetup
+   * Options for `rrweb.record`
    */
   rrwebConfig?: RRWebOptions;
 }
