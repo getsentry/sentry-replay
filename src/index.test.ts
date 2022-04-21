@@ -53,7 +53,6 @@ jest.useFakeTimers();
 
 describe('SentryReplay', () => {
   let replay: SentryReplay;
-  // let emitter: (event: RRWebEvent, isCheckout?: boolean) => void;
 
   beforeAll(() => {
     // XXX: We can only call `Sentry.init` once, not sure how to destroy it
