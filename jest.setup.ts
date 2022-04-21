@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 expect.extend({
-  toHaveDifferentSession(
+  toHaveSameSession(
     received: jest.Mocked<SentryReplay>,
     expected: ReplaySession
   ) {
@@ -32,10 +32,10 @@ expect.extend({
 
     return pass
       ? {
-          pass: false,
+          pass: true,
           message: () =>
             this.utils.matcherHint(
-              'toHaveDifferentSession',
+              'toHaveSameSession',
               undefined,
               undefined,
               options
@@ -45,10 +45,10 @@ expect.extend({
             `Received: ${this.utils.printReceived(received.session)}`,
         }
       : {
-          pass: true,
+          pass: false,
           message: () =>
             this.utils.matcherHint(
-              'toHaveDifferentSession',
+              'toHaveSameSession',
               undefined,
               undefined,
               options
@@ -112,3 +112,13 @@ expect.extend({
         };
   },
 });
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace jest {
+    interface Matchers<R> {
+      toHaveSentReplay(expected?: RRWebEvent[]): CustomMatcherResult;
+      toHaveSameSession(expected: ReplaySession): CustomMatcherResult;
+    }
+  }
+}

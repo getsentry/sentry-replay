@@ -84,6 +84,7 @@ describe('SentryReplay', () => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
+    recordMock.takeFullSnapshot.mockClear();
   });
 
   afterAll(() => {
@@ -113,7 +114,6 @@ describe('SentryReplay', () => {
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
-    recordMock.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -130,7 +130,35 @@ describe('SentryReplay', () => {
     expect(recordMock.takeFullSnapshot).toHaveBeenLastCalledWith(true);
 
     // Should have created a new session
-    expect(replay).toHaveDifferentSession(initialSession);
+    expect(replay).not.toHaveSameSession(initialSession);
+  });
+
+  it('does not create a new session if user hides the tab and comes back within 60 seconds', () => {
+    const initialSession = replay.session;
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'hidden';
+      },
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(recordMock.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(replay).toHaveSameSession(initialSession);
+
+    // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
+    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'visible';
+      },
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(recordMock.takeFullSnapshot).not.toHaveBeenCalled();
+    // Should NOT have created a new session
+    expect(replay).toHaveSameSession(initialSession);
   });
 
   it('uploads a replay event when document becomes hidden', () => {
@@ -272,12 +300,8 @@ describe('SentryReplay', () => {
     ]);
 
     // Should be a new session
-    expect(replay).toHaveDifferentSession(initialSession);
+    expect(replay).not.toHaveSameSession(initialSession);
 
     (replay.sendReplayRequest as jest.Mock).mockReset();
   });
-
-  it.todo(
-    'does not create a new session if user hides the tab and comes back within 60 seconds'
-  );
 });
