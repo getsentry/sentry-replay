@@ -266,7 +266,7 @@ describe('SentryReplay', () => {
     (replay.sendReplayRequest as jest.Mock).mockReset();
   });
 
-  it('create a new session if user has been idle for more than 15 minutes and comes back to move their mouse', () => {
+  it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', () => {
     const initialSession = replay.session;
 
     expect(initialSession.id).toBeDefined();
