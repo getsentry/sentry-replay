@@ -50,7 +50,7 @@ expect.extend({
     const lastCall = calls[calls.length - 1];
 
     const pass =
-      lastCall &&
+      !!lastCall &&
       ATTACHMENTS_URL_REGEX.test(lastCall[0]) &&
       this.equals(expected, lastCall[1]);
 
