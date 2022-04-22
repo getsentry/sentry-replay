@@ -10,14 +10,6 @@ const ATTACHMENTS_URL_REGEX = new RegExp(
   'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
 );
 
-beforeAll(async () => {
-  jest.setSystemTime(new Date(BASE_TIMESTAMP));
-});
-
-afterEach(() => {
-  jest.setSystemTime(new Date(BASE_TIMESTAMP));
-});
-
 expect.extend({
   toHaveSameSession(
     received: jest.Mocked<SentryReplay>,
