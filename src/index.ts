@@ -42,7 +42,7 @@ interface PluginOptions {
 
 interface SentryReplayConfiguration extends PluginOptions {
   /**
-   * Options for `rrweb.record`
+   * Options for `rrweb.recordsetup
    */
   rrwebConfig?: RRWebOptions;
 }
@@ -95,10 +95,12 @@ export class SentryReplay {
   session: ReplaySession | undefined;
 
   static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
-    const { host, path, projectId, port, protocol, user } = dsn;
-    return `${protocol}://${host}${port !== '' ? `:${port}` : ''}${
-      path !== '' ? `/${path}` : ''
-    }/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
+    const { host, projectId, protocol, user } = dsn;
+
+    const port = dsn.port !== '' ? `:${dsn.port}` : '';
+    const path = dsn.path !== '' ? `/${dsn.path}` : '';
+
+    return `${protocol}://${host}${port}${path}/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
   }
 
   constructor({

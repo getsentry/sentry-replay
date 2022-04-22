@@ -30,33 +30,21 @@ expect.extend({
       promise: this.promise,
     };
 
-    return pass
-      ? {
-          pass: true,
-          message: () =>
-            this.utils.matcherHint(
-              'toHaveSameSession',
-              undefined,
-              undefined,
-              options
-            ) +
-            '\n\n' +
-            `Expected: not ${this.utils.printExpected(expected)}\n` +
-            `Received: ${this.utils.printReceived(received.session)}`,
-        }
-      : {
-          pass: false,
-          message: () =>
-            this.utils.matcherHint(
-              'toHaveSameSession',
-              undefined,
-              undefined,
-              options
-            ) +
-            '\n\n' +
-            `Expected: ${this.utils.printExpected(expected)}\n` +
-            `Received: ${this.utils.printReceived(received.session)}`,
-        };
+    return {
+      pass,
+      message: () =>
+        this.utils.matcherHint(
+          'toHaveSameSession',
+          undefined,
+          undefined,
+          options
+        ) +
+        '\n\n' +
+        `Expected: ${pass ? 'not ' : ''}${this.utils.printExpected(
+          expected
+        )}\n` +
+        `Received: ${this.utils.printReceived(received.session)}`,
+    };
   },
 
   /**
@@ -79,37 +67,25 @@ expect.extend({
       promise: this.promise,
     };
 
-    return pass
-      ? {
-          pass: true,
-          message: () =>
-            !lastCall
-              ? 'Expected Replay to not have been sent, but a request was attempted'
-              : this.utils.matcherHint(
-                  'toHaveSentReplay',
-                  undefined,
-                  undefined,
-                  options
-                ) +
-                '\n\n' +
-                `Expected: not ${this.utils.printExpected(expected)}\n` +
-                `Received: ${this.utils.printReceived(lastCall[1])}`,
-        }
-      : {
-          pass: false,
-          message: () =>
-            !lastCall
-              ? 'Expected Replay to have been sent, but a request was not attempted'
-              : this.utils.matcherHint(
-                  'toHaveSentReplay',
-                  undefined,
-                  undefined,
-                  options
-                ) +
-                '\n\n' +
-                `Expected: ${this.utils.printExpected(expected)}\n` +
-                `Received: ${this.utils.printReceived(lastCall[1])}`,
-        };
+    return {
+      pass,
+      message: () =>
+        !lastCall
+          ? pass
+            ? 'Expected Replay to not have been sent, but a request was attempted'
+            : 'Expected Replay to have been sent, but a request was not attempted'
+          : this.utils.matcherHint(
+              'toHaveSentReplay',
+              undefined,
+              undefined,
+              options
+            ) +
+            '\n\n' +
+            `Expected: ${pass ? 'not ' : ''}${this.utils.printExpected(
+              expected
+            )}\n` +
+            `Received: ${this.utils.printReceived(lastCall[1])}`,
+    };
   },
 });
 
