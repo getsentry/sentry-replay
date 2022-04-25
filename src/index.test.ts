@@ -75,7 +75,7 @@ describe('SentryReplay', () => {
     jest.runAllTimers();
   });
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     (replay?.sendReplayRequest as jest.Mock).mockClear();
   });

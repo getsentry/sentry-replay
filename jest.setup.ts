@@ -1,10 +1,7 @@
-import type { eventWithTime } from 'rrweb/typings/types';
+import type { RRWebEvent } from '@/types';
 
 import { SentryReplay } from '@';
 import { ReplaySession } from '@/session';
-import { BASE_TIMESTAMP } from './test';
-
-type RRWebEvent = eventWithTime;
 
 const ATTACHMENTS_URL_REGEX = new RegExp(
   'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
@@ -85,7 +82,7 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace jest {
     interface Matchers<R> {
-      toHaveSentReplay(expected?: RRWebEvent[]): CustomMatcherResult;
+      toHaveSentReplay(expected: RRWebEvent[]): CustomMatcherResult;
       toHaveSameSession(expected: ReplaySession): CustomMatcherResult;
     }
   }
