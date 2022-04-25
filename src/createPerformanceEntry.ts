@@ -34,6 +34,12 @@ export interface ReplayPerformanceEntry {
   data?: Record<string, any>;
 }
 
+interface MemoryInfo {
+  jsHeapSizeLimit: number;
+  totalJSHeapSize: number;
+  usedJSHeapSize: number;
+}
+
 // Map entryType -> function to normalize data for event
 const ENTRY_TYPES: Record<
   string,
@@ -122,6 +128,23 @@ function createLargestContentfulPaint(
     end: start + duration,
     data: {
       size,
+    },
+  };
+}
+
+export function createMemoryEntry(memoryEntry: MemoryInfo) {
+  const { jsHeapSizeLimit, totalJSHeapSize, usedJSHeapSize } = memoryEntry;
+  return {
+    type: 'memory',
+    name: 'memory',
+    start: getAbsoluteTime(Date.now()),
+    end: getAbsoluteTime(Date.now()),
+    data: {
+      memory: {
+        jsHeapSizeLimit,
+        totalJSHeapSize,
+        usedJSHeapSize,
+      },
     },
   };
 }
