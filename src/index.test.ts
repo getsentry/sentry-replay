@@ -207,13 +207,6 @@ describe('SentryReplay', () => {
   });
 
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', () => {
-    jest.spyOn(replay, 'sendReplayRequest');
-    (replay.sendReplayRequest as jest.Mock).mockImplementationOnce(
-      jest.fn(async () => {
-        return;
-      })
-    );
-
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     mockRecord._emitter(TEST_EVENT);
 
@@ -239,13 +232,6 @@ describe('SentryReplay', () => {
   });
 
   it('uploads a replay event if 15 seconds have elapsed since the last replay upload', () => {
-    jest.spyOn(replay, 'sendReplayRequest');
-    (replay.sendReplayRequest as jest.Mock).mockImplementation(
-      jest.fn(async () => {
-        return;
-      })
-    );
-
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
@@ -259,7 +245,7 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSentReplay([...Array(5)].map(() => TEST_EVENT));
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
-    (replay.sendReplayRequest as jest.Mock).mockClear();
+    mockSendReplayRequest.mockClear();
     jest.advanceTimersByTime(5000);
     expect(replay).not.toHaveSentReplay();
 
@@ -268,13 +254,13 @@ describe('SentryReplay', () => {
     expect(replay.events).toHaveLength(0);
 
     // Let's make sure it continues to work
-    (replay.sendReplayRequest as jest.Mock).mockClear();
+    mockSendReplayRequest.mockClear();
     mockRecord._emitter(TEST_EVENT);
     jest.advanceTimersByTime(5000);
     expect(replay).toHaveSentReplay([TEST_EVENT]);
 
     // Clean-up
-    (replay.sendReplayRequest as jest.Mock).mockReset();
+    mockSendReplayRequest.mockReset();
   });
 
   it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', () => {
@@ -312,6 +298,6 @@ describe('SentryReplay', () => {
     // Should be a new session
     expect(replay).not.toHaveSameSession(initialSession);
 
-    (replay.sendReplayRequest as jest.Mock).mockReset();
+    mockSendReplayRequest.mockReset();
   });
 });
