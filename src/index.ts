@@ -256,16 +256,31 @@ export class SentryReplay {
   addListeners() {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
 
-    if ('PerformanceObserver' in window) {
-      this.performanceObserver = new PerformanceObserver(
-        this.handlePerformanceObserver
-      );
-
-      // Observe everything for now
-      this.performanceObserver.observe({
-        entryTypes: [...PerformanceObserver.supportedEntryTypes],
-      });
+    if (!('PerformanceObserver' in window)) {
+      return;
     }
+
+    this.performanceObserver = new PerformanceObserver(
+      this.handlePerformanceObserver
+    );
+
+    // Observe almost everything for now (no mark/measure)
+    [
+      'element',
+      'event',
+      'first-input',
+      'largest-contentful-paint',
+      'layout-shift',
+      'longtask',
+      'navigation',
+      'paint',
+      'resource',
+    ].forEach((type) =>
+      this.performanceObserver.observe({
+        type,
+        buffered: true,
+      })
+    );
   }
 
   removeListeners() {
@@ -347,7 +362,7 @@ export class SentryReplay {
    **/
   createReplayEvent() {
     logger.log('CreateReplayEvent rootReplayId', this.session.id);
-    this.replayEvent = Sentry.startTransaction({
+    this.replayEvent = Sentry.getCurrentHub().startTransaction({
       name: REPLAY_EVENT_NAME,
       parentSpanId: this.session.spanId,
       traceId: this.session.traceId,

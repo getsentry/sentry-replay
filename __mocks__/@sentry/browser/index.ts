@@ -10,9 +10,4 @@ const getCurrentHub = jest.fn(() => ({
 const addGlobalEventProcessor = jest.fn();
 const configureScope = jest.fn();
 
-export {
-  getCurrentHub,
-  addGlobalEventProcessor,
-  startTransaction,
-  configureScope,
-};
+export { getCurrentHub, addGlobalEventProcessor, configureScope };

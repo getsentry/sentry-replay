@@ -1,58 +1,67 @@
+jest.mock('rrweb', () => {
+  const mockRecordFn: jest.Mock & Partial<RecordAdditionalProperties> = jest.fn(
+    ({ emit }) => {
+      mockRecordFn._emitter = emit;
+    }
+  );
+  mockRecordFn.takeFullSnapshot = jest.fn((isCheckout) => {
+    if (!mockRecordFn._emitter) {
+      return;
+    }
+
+    mockRecordFn._emitter(
+      {
+        data: { isCheckout },
+        timestamp: BASE_TIMESTAMP,
+        type: 2,
+      },
+      isCheckout
+    );
+  });
+
+  return {
+    record: mockRecordFn as RecordMock,
+  };
+});
+
 import * as Sentry from '@sentry/browser';
 import '@sentry/tracing';
+import * as rrweb from 'rrweb';
+
 import { SentryReplay } from '@';
 import {
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
-} from './session/constants';
+} from '@/session/constants';
 import { BASE_TIMESTAMP } from '@test';
-import type { RRWebEvent } from './types';
+import type { RRWebEvent } from '@/types';
 
 type RecordAdditionalProperties = {
   takeFullSnapshot: jest.Mock;
-  _emitter: (event: RRWebEvent) => void;
+
+  // Below are not mocked
+  addCustomEvent: () => void;
+  freezePage: () => void;
+  mirror: unknown;
+
+  // Custom property to fire events in tests, does not exist in rrweb.record
+  _emitter: (event: RRWebEvent, ...args: any[]) => void;
 };
-type RecordMock = jest.Mock & RecordAdditionalProperties;
+type RecordMock = jest.MockedFunction<typeof rrweb.record> &
+  RecordAdditionalProperties;
 
-jest.mock('rrweb', () => {
-  const recordMockFn: jest.Mock & Partial<RecordAdditionalProperties> = jest.fn(
-    ({ emit }) => {
-      recordMockFn._emitter = emit;
-    }
-  );
-  recordMockFn.takeFullSnapshot = jest.fn((isCheckout) => {
-    if (!recordMockFn._emitter) {
-      return;
-    }
-
-    if (!isCheckout) {
-      return;
-    }
-
-    // This is probably not a good mock, I don't know what `isCheckout` param
-    // does
-    recordMockFn._emitter({
-      data: { isCheckout },
-      timestamp: BASE_TIMESTAMP,
-      type: 2,
-    });
-  });
-
-  return {
-    record: recordMockFn as RecordMock,
-  };
-});
 jest.unmock('@sentry/browser');
 
-// eslint-disable-next-line
-const rrweb = require('rrweb');
-
-const recordMock = rrweb.record as RecordMock;
+const mockRecord = rrweb.record as RecordMock;
 
 jest.useFakeTimers();
 
 describe('SentryReplay', () => {
   let replay: SentryReplay;
+  type MockSendReplayRequest = jest.MockedFunction<
+    typeof replay.sendReplayRequest
+  >;
+  let mockSendReplayRequest: MockSendReplayRequest;
 
   beforeAll(() => {
     // XXX: We can only call `Sentry.init` once, not sure how to destroy it
@@ -67,7 +76,8 @@ describe('SentryReplay', () => {
       integrations: [replay],
     });
     jest.spyOn(replay, 'sendReplayRequest');
-    (replay.sendReplayRequest as jest.Mock).mockImplementation(
+    mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
+    mockSendReplayRequest.mockImplementation(
       jest.fn(async () => {
         return;
       })
@@ -77,14 +87,14 @@ describe('SentryReplay', () => {
 
   beforeEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    (replay?.sendReplayRequest as jest.Mock).mockClear();
+    mockSendReplayRequest.mockClear();
   });
 
   afterEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
-    recordMock.takeFullSnapshot.mockClear();
+    mockRecord.takeFullSnapshot.mockClear();
   });
 
   afterAll(() => {
@@ -92,7 +102,7 @@ describe('SentryReplay', () => {
   });
 
   it('calls rrweb.record with custom options', () => {
-    expect(recordMock.mock.calls[0][0]).toMatchInlineSnapshot(`
+    expect(mockRecord.mock.calls[0][0]).toMatchInlineSnapshot(`
       Object {
         "blockClass": "sr-block",
         "emit": [Function],
@@ -127,7 +137,7 @@ describe('SentryReplay', () => {
 
     document.dispatchEvent(new Event('visibilitychange'));
 
-    expect(recordMock.takeFullSnapshot).toHaveBeenLastCalledWith(true);
+    expect(mockRecord.takeFullSnapshot).toHaveBeenLastCalledWith(true);
 
     // Should have created a new session
     expect(replay).not.toHaveSameSession(initialSession);
@@ -143,7 +153,7 @@ describe('SentryReplay', () => {
       },
     });
     document.dispatchEvent(new Event('visibilitychange'));
-    expect(recordMock.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).toHaveSameSession(initialSession);
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
@@ -156,13 +166,13 @@ describe('SentryReplay', () => {
     });
     document.dispatchEvent(new Event('visibilitychange'));
 
-    expect(recordMock.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     // Should NOT have created a new session
     expect(replay).toHaveSameSession(initialSession);
   });
 
   it('uploads a replay event when document becomes hidden', () => {
-    recordMock.takeFullSnapshot.mockClear();
+    mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -179,7 +189,7 @@ describe('SentryReplay', () => {
 
     document.dispatchEvent(new Event('visibilitychange'));
 
-    expect(recordMock.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
     const regex = new RegExp(
       'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
@@ -205,13 +215,13 @@ describe('SentryReplay', () => {
     );
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
-    rrweb.record._emitter(TEST_EVENT);
+    mockRecord._emitter(TEST_EVENT);
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
     jest.advanceTimersByTime(ELAPSED);
 
-    expect(recordMock.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
     const regex = new RegExp(
       'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
@@ -239,13 +249,13 @@ describe('SentryReplay', () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
-      rrweb.record._emitter(TEST_EVENT);
+      mockRecord._emitter(TEST_EVENT);
       jest.advanceTimersByTime(4000);
     });
 
     // We are at time = +16seconds now (relative to BASE_TIMESTAMP)
     // The next event should cause an upload immediately
-    rrweb.record._emitter(TEST_EVENT);
+    mockRecord._emitter(TEST_EVENT);
     expect(replay).toHaveSentReplay([...Array(5)].map(() => TEST_EVENT));
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
@@ -259,7 +269,7 @@ describe('SentryReplay', () => {
 
     // Let's make sure it continues to work
     (replay.sendReplayRequest as jest.Mock).mockClear();
-    rrweb.record._emitter(TEST_EVENT);
+    mockRecord._emitter(TEST_EVENT);
     jest.advanceTimersByTime(5000);
     expect(replay).toHaveSentReplay([TEST_EVENT]);
 
@@ -284,7 +294,7 @@ describe('SentryReplay', () => {
       timestamp: BASE_TIMESTAMP,
       type: 3,
     };
-    rrweb.record._emitter(TEST_EVENT);
+    mockRecord._emitter(TEST_EVENT);
     expect(replay).not.toHaveSentReplay();
 
     // Instead of recording the above event, a full snapshot will occur.
@@ -293,7 +303,7 @@ describe('SentryReplay', () => {
     // and produce a checkout based on a previous checkout + updates, and then
     // replay the event on top. Or maybe replay the event on top of a refresh
     // snapshot.
-    expect(recordMock.takeFullSnapshot).toHaveBeenCalledWith(true);
+    expect(mockRecord.takeFullSnapshot).toHaveBeenCalledWith(true);
 
     expect(replay).toHaveSentReplay([
       { data: { isCheckout: true }, timestamp: BASE_TIMESTAMP, type: 2 },
