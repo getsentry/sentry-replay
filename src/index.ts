@@ -386,7 +386,7 @@ export class SentryReplay {
         startTimestamp: start,
         data,
       });
-      span?.finish(end);
+      span.finish(end);
     });
   }
 
