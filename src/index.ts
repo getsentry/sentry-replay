@@ -404,7 +404,7 @@ export class SentryReplay {
 
     // window.performance.memory is a non-standard API and doesn't work on all browsers
     // so we check before creating the event.
-    if (window.performance.memory) {
+    if ('memory' in window.performance) {
       entryEvents.push(createMemoryEntry(window.performance.memory));
     }
     // This current implementation is to create spans on the transaction referenced in `this.replayEvent`
