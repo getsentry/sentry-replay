@@ -405,6 +405,7 @@ export class SentryReplay {
     // window.performance.memory is a non-standard API and doesn't work on all browsers
     // so we check before creating the event.
     if ('memory' in window.performance) {
+      // @ts-expect-error memory doesn't exist on type Performance as the API is non-standard
       entryEvents.push(createMemoryEntry(window.performance.memory));
     }
     // This current implementation is to create spans on the transaction referenced in `this.replayEvent`
