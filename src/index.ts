@@ -160,6 +160,9 @@ export class SentryReplay {
       return event;
     });
 
+    // not fully initialized and the event will not get properly sent to Sentry
+    this.createReplayEvent();
+
     record({
       ...this.rrwebRecordOptions,
       emit: (event: RRWebEvent, isCheckout?: boolean) => {
@@ -232,9 +235,6 @@ export class SentryReplay {
     });
 
     this.addListeners();
-
-    // not fully initialized and the event will not get properly sent to Sentry
-    this.createReplayEvent();
   }
 
   /**
