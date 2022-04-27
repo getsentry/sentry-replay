@@ -137,7 +137,6 @@ export function createMemoryEntry(memoryEntry: MemoryInfo) {
   // we can't use getAbsoluteTime because it adds the event time to
   // window.performance.timeOrigin, so we get right now instead.
   const time = new Date().getTime() / 1000;
-  console.log(time);
   return {
     type: 'memory',
     name: 'memory',
