@@ -134,7 +134,7 @@ function createLargestContentfulPaint(
 
 export function createMemoryEntry(memoryEntry: MemoryInfo) {
   const { jsHeapSizeLimit, totalJSHeapSize, usedJSHeapSize } = memoryEntry;
-  // we can't use getAbsoluteTime because we add the event time to
+  // we can't use getAbsoluteTime because it adds the event time to
   // window.performance.timeOrigin, so we get right now instead.
   const time = new Date().getTime() / 1000;
   console.log(time);
