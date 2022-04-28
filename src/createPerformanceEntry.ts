@@ -50,7 +50,6 @@ export function createPerformanceEntries(entries: PerformanceEntry[]) {
 
 function createPerformanceEntry(entry: PerformanceEntry) {
   if (ENTRY_TYPES[entry.entryType] === undefined) {
-    console.log(`No handler for entry type: ${entry.entryType}`, entry);
     return null;
   }
 
