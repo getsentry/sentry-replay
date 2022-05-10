@@ -27,6 +27,7 @@ export function createSession({
     name: ROOT_REPLAY_NAME,
     tags: {
       isReplayRoot: 'yes',
+      sequenceId: 0,
     },
   });
 
@@ -43,6 +44,7 @@ export function createSession({
     traceId: transaction.traceId,
     started: currentDate,
     lastActivity: currentDate,
+    sequenceId: 0,
   };
 
   if (stickySession) {

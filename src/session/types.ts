@@ -4,4 +4,5 @@ export interface ReplaySession {
   spanId: string;
   started: number;
   lastActivity: number;
+  sequenceId: number;
 }

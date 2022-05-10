@@ -15,7 +15,7 @@ it('creates a new session with no sticky sessions', function () {
 
   expect(Sentry.getCurrentHub().startTransaction).toHaveBeenCalledWith({
     name: 'sentry-replay',
-    tags: { isReplayRoot: 'yes' },
+    tags: { isReplayRoot: 'yes', sequenceId: 0 },
   });
 
   expect(saveSession).not.toHaveBeenCalled();
@@ -32,11 +32,12 @@ it('creates a new session with sticky sessions', function () {
 
   expect(Sentry.getCurrentHub().startTransaction).toHaveBeenCalledWith({
     name: 'sentry-replay',
-    tags: { isReplayRoot: 'yes' },
+    tags: { isReplayRoot: 'yes', sequenceId: 0 },
   });
 
   expect(saveSession).toHaveBeenCalledWith({
     id: 'transaction_id',
+    sequenceId: 0,
     traceId: 'trace_id',
     spanId: 'span_id',
     started: expect.any(Number),

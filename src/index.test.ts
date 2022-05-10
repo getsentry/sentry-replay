@@ -121,6 +121,7 @@ describe('SentryReplay', () => {
     expect(replay.session.id).toBeDefined();
     expect(replay.session.spanId).toBeDefined();
     expect(replay.session.traceId).toBeDefined();
+    expect(replay.session.sequenceId).toBeDefined();
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
@@ -201,6 +202,7 @@ describe('SentryReplay', () => {
 
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
+    expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
     expect(replay.events).toHaveLength(0);
@@ -226,6 +228,7 @@ describe('SentryReplay', () => {
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
+    expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
     expect(replay.events).toHaveLength(0);
@@ -250,6 +253,7 @@ describe('SentryReplay', () => {
     expect(replay).not.toHaveSentReplay();
 
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
+    expect(replay.session.sequenceId).toBe(1);
     // events array should be empty
     expect(replay.events).toHaveLength(0);
 

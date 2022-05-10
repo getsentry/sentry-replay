@@ -20,10 +20,9 @@ import { updateSessionActivity } from './session/updateSessionActivity';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-
+import { saveSession } from './session/saveSession';
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
-
 interface PluginOptions {
   /**
    * The amount of time to wait before sending a replay
@@ -362,15 +361,22 @@ export class SentryReplay {
    * replay event.
    **/
   createReplayEvent() {
-    logger.log('CreateReplayEvent rootReplayId', this.session.id);
+    logger.log(
+      'CreateReplayEvent rootReplayId',
+      this.session.id,
+      this.session.sequenceId
+    );
+
     this.replayEvent = Sentry.getCurrentHub().startTransaction({
       name: REPLAY_EVENT_NAME,
       parentSpanId: this.session.spanId,
       traceId: this.session.traceId,
       tags: {
         replayId: this.session.id,
+        sequenceId: ++this.session.sequenceId,
       },
     });
+    saveSession(this.session);
     Sentry.configureScope((scope: Scope) => scope.setSpan(this.replayEvent));
     return this.replayEvent;
   }
