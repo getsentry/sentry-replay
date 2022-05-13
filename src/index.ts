@@ -458,6 +458,7 @@ export class SentryReplay implements Integration {
 
     this.addPerformanceEntries();
     const recordingData = await this.eventBuffer.finish();
+    console.log('???');
     this.sendReplay(this.session.id, recordingData);
 
     this.initialEventTimestampSinceFlush = null;
@@ -476,6 +477,7 @@ export class SentryReplay implements Integration {
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
   async sendReplayRequest(endpoint: string, data: Uint8Array | string) {
+    console.log(2);
     const formData = new FormData();
     const payloadBlob = new Blob([data], {
       type: 'application/json',
@@ -515,9 +517,10 @@ export class SentryReplay implements Integration {
       client.getDsn(),
       eventId
     );
-
     try {
+      console.log(11);
       await this.sendReplayRequest(endpoint, data);
+      console.log(22);
       return true;
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry

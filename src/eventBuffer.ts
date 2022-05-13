@@ -3,9 +3,14 @@ import { logger } from './util/logger';
 import { SentryReplay } from './index.js';
 import workerString from './worker/worker.js';
 import { Breadcrumb } from '@sentry/types';
+declare global {
+  interface Window {
+    __SENTRY_USE_ARRAY_BUFFER: boolean;
+  }
+}
 
 export function createEventBuffer() {
-  if (window.Worker) {
+  if (window.Worker && !window.__SENTRY_USE_ARRAY_BUFFER) {
     logger.log('using compression worker');
     return new EventBufferCompressionWorker();
   }

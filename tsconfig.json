@@ -16,7 +16,8 @@
       "@/*": ["src/*"],
       "@test": ["test"],
       "@test/*": ["test/*"]
-    }
+    },
+    "allowJs": true
   },
   "include": [
     "src/**/*.ts",

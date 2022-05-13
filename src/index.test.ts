@@ -84,6 +84,7 @@ describe('SentryReplay', () => {
       })
     );
     jest.runAllTimers();
+    window.__SENTRY_USE_ARRAY_BUFFER = true;
   });
 
   beforeEach(() => {
@@ -171,7 +172,7 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
-  it('uploads a replay event when document becomes hidden', () => {
+  fit('uploads a replay event when document becomes hidden', () => {
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
@@ -194,12 +195,11 @@ describe('SentryReplay', () => {
     const regex = new RegExp(
       'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
     );
-    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
-      endpoint: expect.stringMatching(regex),
-      events: [TEST_EVENT],
-      replaySpans: [],
-      breadcrumbs: [],
-    });
+    expect(replay.sendReplayRequest).toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledWith(
+      expect.stringMatching(regex),
+      [TEST_EVENT]
+    );
 
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
