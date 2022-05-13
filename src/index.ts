@@ -9,6 +9,7 @@ import {
   createMemoryEntry,
   ReplayPerformanceEntry,
 } from './createPerformanceEntry';
+import { createEventBuffer } from './eventBuffer';
 import { ReplaySession } from './session';
 import {
   REPLAY_EVENT_NAME,
@@ -28,6 +29,16 @@ import addInstrumentationListeners from './addInstrumentationListeners';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
+
+type RRWebPayload = string | Uint8Array;
+
+interface EventBuffer {
+  addEvent: (event: RRWebEvent) => void;
+  addBreadcrumb: (breadcrumb: Breadcrumb) => void;
+  addReplaySpan: (replaySpan: ReplaySpan) => void;
+  finish: () => Promise<RRWebPayload>;
+}
+
 interface PluginOptions {
   /**
    * The amount of time to wait before sending a replay
@@ -52,13 +63,6 @@ interface SentryReplayConfiguration extends PluginOptions {
   rrwebConfig?: RRWebOptions;
 }
 
-interface ReplayRequest {
-  endpoint: string;
-  events: RRWebEvent[];
-  replaySpans: ReplaySpan[];
-  breadcrumbs: Breadcrumb[];
-}
-
 export class SentryReplay implements Integration {
   /**
    * @inheritDoc
@@ -74,6 +78,8 @@ export class SentryReplay implements Integration {
    * Buffer of rrweb events that will be serialized as JSON and saved as an attachment to a Sentry event
    */
   public events: RRWebEvent[] = [];
+
+  public eventBuffer: EventBuffer;
 
   public performanceEvents: PerformanceEntry[] = [];
 
@@ -132,7 +138,7 @@ export class SentryReplay implements Integration {
     };
 
     this.options = { uploadMinDelay, uploadMaxDelay, stickySession };
-    this.events = [];
+    this.eventBuffer = createEventBuffer();
   }
 
   setupOnce() {
@@ -206,7 +212,7 @@ export class SentryReplay implements Integration {
         if (isCheckout) {
           this.events = [event];
         } else {
-          this.events.push(event);
+          this.eventBuffer.addEvent(event);
         }
 
         // This event type is a fullsnapshot, we should save immediately when this occurs
@@ -430,7 +436,7 @@ export class SentryReplay implements Integration {
     return false;
   }
 
-  finishReplayEvent() {
+  async finishReplayEvent() {
     if (!this.checkAndHandleExpiredSession()) {
       logger.error(
         new Error('Attempting to finish replay event after session expired.')
@@ -451,7 +457,8 @@ export class SentryReplay implements Integration {
     });
 
     this.addPerformanceEntries();
-    this.sendReplay(this.session.id);
+    const recordingData = await this.eventBuffer.finish();
+    this.sendReplay(this.session.id, recordingData);
 
     this.initialEventTimestampSinceFlush = null;
     // TBD: Alternatively we could update this after every rrweb event
@@ -468,28 +475,18 @@ export class SentryReplay implements Integration {
   /**
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
-  async sendReplayRequest({
-    endpoint,
-    events,
-    replaySpans,
-    breadcrumbs,
-  }: ReplayRequest) {
-    const stringifiedPayload = JSON.stringify({
-      recording: events,
-      replaySpans: replaySpans,
-      breadcrumbs: breadcrumbs,
-    });
+  async sendReplayRequest(endpoint: string, data: Uint8Array | string) {
     const formData = new FormData();
-    formData.append(
-      'rrweb',
-      new Blob([stringifiedPayload], {
-        type: 'application/json',
-      }),
-      `rrweb-${new Date().getTime()}.json`
-    );
+    const payloadBlob = new Blob([data], {
+      type: 'application/json',
+    });
+    logger.log('blob size in bytes: ', payloadBlob.size);
+
+    formData.append('rrweb', payloadBlob, `rrweb-${new Date().getTime()}.json`);
+    logger.log;
 
     // If sendBeacon is supported and payload is smol enough...
-    if (this.hasSendBeacon() && stringifiedPayload.length <= 65536) {
+    if (this.hasSendBeacon() && data.length <= 65536) {
       logger.log(`uploading attachment via sendBeacon()`);
       window.navigator.sendBeacon(endpoint, formData);
       return;
@@ -506,19 +503,12 @@ export class SentryReplay implements Integration {
   /**
    * Finalize and send the current replay event to Sentry
    */
-  async sendReplay(eventId: string) {
-    // short circuit if theres no events to replay
-    if (!this.events.length) return;
-
+  async sendReplay(eventId: string, data: Uint8Array | string) {
     // Make a copy of the events array reference and immediately clear the
     // events member so that we do not lose new events while uploading
     // attachment.
-    const events = this.events;
-    const replaySpans = this.replaySpans;
-    const breadcrumbs = this.breadcrumbs;
-    this.replaySpans = [];
-    this.breadcrumbs = [];
-    this.events = [];
+    // const eventsTemp = this.eventBuffer.events;
+    this.eventBuffer.finish();
 
     const client = Sentry.getCurrentHub().getClient();
     const endpoint = SentryReplay.attachmentUrlFromDsn(
@@ -527,19 +517,13 @@ export class SentryReplay implements Integration {
     );
 
     try {
-      await this.sendReplayRequest({
-        endpoint,
-        events,
-        replaySpans,
-        breadcrumbs,
-      });
+      await this.sendReplayRequest(endpoint, data);
       return true;
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry
       console.error(ex);
-
+      // TODO: handle failures here
       // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
-      this.events = [...events, ...this.events];
       return false;
     }
   }
