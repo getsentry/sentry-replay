@@ -6,7 +6,8 @@
   "module": "dist/index.es.js",
   "scripts": {
     "bootstrap": "yarn && cd demo && yarn",
-    "build": "NODE_ENV=production yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
+    "build": "yarn run build-worker && yarn run build-src",
+    "build-src": "NODE_ENV=production yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
     "build-worker": "yarn rollup --config rollup.config.worker.ts",
     "clean": "yarn rimraf dist",
     "lint": "yarn eslint . --ext .js,.jsx,.ts,.tsx",
