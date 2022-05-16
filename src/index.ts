@@ -326,7 +326,6 @@ export class SentryReplay implements Integration {
    */
   handleVisibilityChange = () => {
     const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
-
     if (isExpired) {
       if (document.visibilityState === 'visible') {
         // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
@@ -344,16 +343,13 @@ export class SentryReplay implements Integration {
       // the tab.
       return;
     }
-
     // Otherwise if session is not expired...
-
     // Update with current timestamp as the last session activity
     // Only updating session on visibility change to be conservative about
     // writing to session storage. This could be changed in the future.
     updateSessionActivity({
       stickySession: this.options.stickySession,
     });
-
     // Send replay when the page/tab becomes hidden. There is no reason to send
     // replay if it becomes visible, since no actions we care about were done
     // while it was hidden
@@ -447,18 +443,17 @@ export class SentryReplay implements Integration {
       console.error(new Error('[Sentry]: No transaction, no replay'));
       return;
     }
-    // TEMP: keep sending a replay event just for the duration
-    captureEvent({
-      message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
-      tags: {
-        replayId: this.session.id,
-        sequenceId: this.session.sequenceId++,
-      },
-    });
+    // // TEMP: keep sending a replay event just for the duration
+    // captureEvent({
+    //   message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
+    //   tags: {
+    //     replayId: this.session.id,
+    //     sequenceId: this.session.sequenceId++,
+    //   },
+    // });
 
     this.addPerformanceEntries();
     const recordingData = await this.eventBuffer.finish();
-    console.log('???');
     this.sendReplay(this.session.id, recordingData);
 
     this.initialEventTimestampSinceFlush = null;
@@ -477,7 +472,6 @@ export class SentryReplay implements Integration {
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
   async sendReplayRequest(endpoint: string, data: Uint8Array | string) {
-    console.log(2);
     const formData = new FormData();
     const payloadBlob = new Blob([data], {
       type: 'application/json',
@@ -518,9 +512,7 @@ export class SentryReplay implements Integration {
       eventId
     );
     try {
-      console.log(11);
       await this.sendReplayRequest(endpoint, data);
-      console.log(22);
       return true;
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry

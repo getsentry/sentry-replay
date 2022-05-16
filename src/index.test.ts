@@ -51,10 +51,30 @@ type RecordMock = jest.MockedFunction<typeof rrweb.record> &
   RecordAdditionalProperties;
 
 jest.unmock('@sentry/browser');
+// jest.mock('./session/createSession');
 
 const mockRecord = rrweb.record as RecordMock;
 
 jest.useFakeTimers();
+// jest.setTimeout(30000);
+class mockTransport {
+  async sendEvent() {
+    return {
+      status: 200,
+      event: 'ok',
+      type: 'transaction',
+    };
+  }
+  async sendSession() {
+    console.log('her2');
+  }
+  async recordLostEvent() {
+    console.log('here3');
+  }
+  async close() {
+    console.log('here4');
+  }
+}
 
 // TODO: tests for our breadcrumbs / spans
 describe('SentryReplay', () => {
@@ -67,14 +87,21 @@ describe('SentryReplay', () => {
   beforeAll(() => {
     // XXX: We can only call `Sentry.init` once, not sure how to destroy it
     // after it has been in initialized
+    window.__SENTRY_USE_ARRAY_BUFFER = true;
     replay = new SentryReplay({
       stickySession: true,
       rrwebConfig: { ignoreClass: 'sr-test' },
     });
+
     Sentry.init({
       dsn: 'https://dsn@ingest.f00.f00/1',
       tracesSampleRate: 1.0,
       integrations: [replay],
+      autoSessionTracking: false,
+      sendClientReports: false,
+      debug: true,
+      // @ts-expect-error worry about typing later
+      transport: mockTransport,
     });
     jest.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
@@ -84,7 +111,6 @@ describe('SentryReplay', () => {
       })
     );
     jest.runAllTimers();
-    window.__SENTRY_USE_ARRAY_BUFFER = true;
   });
 
   beforeEach(() => {
@@ -92,12 +118,12 @@ describe('SentryReplay', () => {
     mockSendReplayRequest.mockClear();
   });
 
-  afterEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    sessionStorage.clear();
-    replay.loadSession({ expiry: SESSION_IDLE_DURATION });
-    mockRecord.takeFullSnapshot.mockClear();
-  });
+  // afterEach(() => {
+  //   jest.setSystemTime(new Date(BASE_TIMESTAMP));
+  //   sessionStorage.clear();
+  //   replay.loadSession({ expiry: SESSION_IDLE_DURATION });
+  //   mockRecord.takeFullSnapshot.mockClear();
+  // });
 
   afterAll(() => {
     replay && replay.teardown();
@@ -172,7 +198,7 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
-  fit('uploads a replay event when document becomes hidden', () => {
+  it('uploads a replay event when document becomes hidden', () => {
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
