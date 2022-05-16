@@ -55,8 +55,9 @@ jest.unmock('@sentry/browser');
 
 const mockRecord = rrweb.record as RecordMock;
 
-jest.useFakeTimers();
-// jest.setTimeout(30000);
+// TODO: see if we can remove legacy once upgraded to jest 28
+// and we can pass config to usefaketimers
+jest.useFakeTimers('legacy');
 class mockTransport {
   async sendEvent() {
     return {
@@ -92,7 +93,6 @@ describe('SentryReplay', () => {
       stickySession: true,
       rrwebConfig: { ignoreClass: 'sr-test' },
     });
-
     Sentry.init({
       dsn: 'https://dsn@ingest.f00.f00/1',
       tracesSampleRate: 1.0,
@@ -110,20 +110,20 @@ describe('SentryReplay', () => {
         return;
       })
     );
-    jest.runAllTimers();
+    // jest.runAllTimers();
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    // jest.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
   });
 
-  // afterEach(() => {
-  //   jest.setSystemTime(new Date(BASE_TIMESTAMP));
-  //   sessionStorage.clear();
-  //   replay.loadSession({ expiry: SESSION_IDLE_DURATION });
-  //   mockRecord.takeFullSnapshot.mockClear();
-  // });
+  afterEach(() => {
+    // jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    sessionStorage.clear();
+    replay.loadSession({ expiry: SESSION_IDLE_DURATION });
+    mockRecord.takeFullSnapshot.mockClear();
+  });
 
   afterAll(() => {
     replay && replay.teardown();
@@ -198,7 +198,8 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
-  it('uploads a replay event when document becomes hidden', () => {
+  it('uploads a replay event when document becomes hidden', async () => {
+    jest.useFakeTimers('legacy');
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
@@ -206,13 +207,37 @@ describe('SentryReplay', () => {
         return 'hidden';
       },
     });
+    // Pretend 5 seconds have passed
+    const ELAPSED = 5000;
+    jest.advanceTimersByTime(ELAPSED);
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    replay.eventBuffer.addEvent(TEST_EVENT);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    const regex = new RegExp(
+      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
+    );
+    expect(replay.sendReplayRequest).toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledWith(
+      expect.stringMatching(regex),
+      JSON.stringify([TEST_EVENT])
+    );
+    // Session's last activity should be updated
+    expect(replay.session.lastActivity).toBeGreaterThan(BASE_TIMESTAMP);
+    // // events array should be empty
+    // expect(replay.eventBuffer.length).toBe(0);
+  });
+
+  it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', () => {
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    mockRecord._emitter(TEST_EVENT);
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
     jest.advanceTimersByTime(ELAPSED);
 
-    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
-    replay.events = [TEST_EVENT];
+    // replay.events = [TEST_EVENT];
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -232,7 +257,7 @@ describe('SentryReplay', () => {
     expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
-    expect(replay.events).toHaveLength(0);
+    // expect(replay.events).toHaveLength(0);
   });
 
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', () => {
@@ -259,7 +284,7 @@ describe('SentryReplay', () => {
     expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
-    expect(replay.events).toHaveLength(0);
+    expect(replay.eventBuffer).toBe(0);
   });
 
   it('uploads a replay event if 15 seconds have elapsed since the last replay upload', () => {
@@ -283,7 +308,7 @@ describe('SentryReplay', () => {
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
     expect(replay.session.sequenceId).toBe(1);
     // events array should be empty
-    expect(replay.events).toHaveLength(0);
+    expect(replay.eventBuffer).toBe(0);
 
     // Let's make sure it continues to work
     mockSendReplayRequest.mockClear();

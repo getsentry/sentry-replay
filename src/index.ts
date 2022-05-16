@@ -74,11 +74,6 @@ export class SentryReplay implements Integration {
    */
   public name: string = SentryReplay.id;
 
-  /**
-   * Buffer of rrweb events that will be serialized as JSON and saved as an attachment to a Sentry event
-   */
-  public events: RRWebEvent[] = [];
-
   public eventBuffer: EventBuffer;
 
   public performanceEvents: PerformanceEntry[] = [];
@@ -207,13 +202,7 @@ export class SentryReplay implements Integration {
           return;
         }
 
-        // We need to clear existing events on a checkout, otherwise they are
-        // incremental event updates and should be appended
-        if (isCheckout) {
-          this.events = [event];
-        } else {
-          this.eventBuffer.addEvent(event);
-        }
+        this.eventBuffer.addEvent(event);
 
         // This event type is a fullsnapshot, we should save immediately when this occurs
         // See https://github.com/rrweb-io/rrweb/blob/d8f9290ca496712aa1e7d472549480c4e7876594/packages/rrweb/src/types.ts#L16

@@ -52,8 +52,8 @@ export class EventBufferArray {
 
 // TODO: better handling if there's no Worker api available
 export class EventBufferCompressionWorker {
-  sentryReplay: SentryReplay;
-  worker: Worker;
+  private worker: Worker;
+  length = 0;
   constructor() {
     const workerBlob = new Blob([workerString]);
     const workerUrl = URL.createObjectURL(workerBlob);
@@ -97,6 +97,7 @@ export class EventBufferCompressionWorker {
         if (e.data.final) {
           logger.log('sending compressed');
           const final = e.data.final as Uint8Array;
+          self.length = 0;
           resolve(final);
           this.removeEventListener('onmessage', finishListener);
         }
