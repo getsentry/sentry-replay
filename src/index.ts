@@ -2,7 +2,6 @@ import * as Sentry from '@sentry/browser';
 import {
   DsnComponents,
   Event,
-  EventProcessor,
   Hub,
   Integration,
   Scope,
@@ -171,15 +170,7 @@ export class SentryReplay implements Integration {
 
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
-    Sentry.addGlobalEventProcessor((event: Event) => {
-      // Do not apply replayId to the root transaction
-      if (event.transaction === ROOT_REPLAY_NAME) {
-        return event;
-      }
-
-      event.tags = { ...event.tags, replayId: this.session.id };
-      return event;
-    });
+    Sentry.addGlobalEventProcessor(this.globalEventProcessor);
 
     // not fully initialized and the event will not get properly sent to Sentry
     this.createReplayEvent();
@@ -256,6 +247,16 @@ export class SentryReplay implements Integration {
     });
 
     this.addListeners();
+  }
+
+  globalEventProcessor(event: Event) {
+    // Do not apply replayId to the root transaction
+    if (event.transaction === ROOT_REPLAY_NAME) {
+      return event;
+    }
+
+    event.tags = { ...event.tags, replayId: this.session.id };
+    return event;
   }
 
   /**
@@ -393,7 +394,7 @@ export class SentryReplay implements Integration {
         replayId: this.session.id,
       },
     });
-    Sentry.configureScope((scope: Scope) => scope.setSpan(this.replayEvent));
+    this.hub.configureScope((scope: Scope) => scope.setSpan(this.replayEvent));
     return this.replayEvent;
   }
 
