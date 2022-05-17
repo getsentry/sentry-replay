@@ -1,23 +1,19 @@
 import { isSessionExpired } from '@/util/isSessionExpired';
 import { logger } from '@/util/logger';
-import { createSession } from './createSession';
+import { createSession, CreateSessionParams } from './createSession';
 import { fetchSession } from './fetchSession';
 
-interface GetSessionParams {
+interface GetSessionParams extends CreateSessionParams {
   /**
    * The length of time (in ms) which we will consider the session to be expired.
    */
   expiry: number;
-  /**
-   * Should save session to sessionStorage?
-   */
-  stickySession: boolean;
 }
 
 /**
  * Get or create a session
  */
-export function getSession({ expiry, stickySession }: GetSessionParams) {
+export function getSession({ expiry, stickySession, hub }: GetSessionParams) {
   const session = stickySession && fetchSession();
 
   if (session) {
@@ -34,7 +30,7 @@ export function getSession({ expiry, stickySession }: GetSessionParams) {
     // Otherwise continue to create a new session
   }
 
-  const newSession = createSession({ stickySession });
+  const newSession = createSession({ stickySession, hub });
 
   return newSession;
 }

@@ -4,8 +4,15 @@ import { logger } from '@/util/logger';
 import { saveSession } from './saveSession';
 import type { ReplaySession } from './types';
 import { ROOT_REPLAY_NAME } from './constants';
+import { Hub } from '@sentry/types';
 
-interface CreateSessionParams {
+export interface CreateSessionParams {
+  /**
+   * Sentry SDK Hub
+   */
+
+  hub?: Hub;
+
   /**
    * Should save to sessionStorage?
    */
@@ -19,11 +26,12 @@ interface CreateSessionParams {
  */
 export function createSession({
   stickySession = false,
+  hub = Sentry.getCurrentHub(),
 }: CreateSessionParams): ReplaySession {
   const currentDate = new Date().getTime();
 
   // Create root replay event, this is where attachments will be saved
-  const transaction = Sentry.getCurrentHub().startTransaction({
+  const transaction = hub.startTransaction({
     name: ROOT_REPLAY_NAME,
     tags: {
       isReplayRoot: 'yes',

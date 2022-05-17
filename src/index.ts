@@ -2,6 +2,8 @@ import * as Sentry from '@sentry/browser';
 import {
   DsnComponents,
   Event,
+  EventProcessor,
+  Hub,
   Integration,
   Scope,
   Transaction,
@@ -45,6 +47,11 @@ interface PluginOptions {
    * If false, will create a new session per pageload
    */
   stickySession?: boolean;
+
+  /**
+   * Sentry SDK Hub -- SDK does not handle multi-hubs well, so this is a hack
+   */
+  hub?: Hub;
 }
 
 interface SentryReplayConfiguration extends PluginOptions {
@@ -99,6 +106,8 @@ export class SentryReplay implements Integration {
 
   private performanceObserver: PerformanceObserver | null = null;
 
+  private hub: Hub;
+
   session: ReplaySession | undefined;
 
   static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
@@ -111,6 +120,7 @@ export class SentryReplay implements Integration {
   }
 
   constructor({
+    hub = Sentry.getCurrentHub(),
     uploadMinDelay = 5000,
     uploadMaxDelay = 15000,
     stickySession = false, // TBD: Making this opt-in for now
@@ -122,6 +132,7 @@ export class SentryReplay implements Integration {
       ...rrwebRecordOptions
     } = {},
   }: SentryReplayConfiguration = {}) {
+    this.hub = hub;
     this.rrwebRecordOptions = {
       maskAllInputs,
       blockClass,
@@ -134,7 +145,7 @@ export class SentryReplay implements Integration {
     this.events = [];
   }
 
-  setupOnce() {
+  setupOnce(): void {
     /**
      * Because we create a transaction in `setupOnce`, we can potentially create a
      * transaction before some native SDK integrations have run and applied their
@@ -153,6 +164,10 @@ export class SentryReplay implements Integration {
     if (!this.session) {
       throw new Error('Invalid session');
     }
+
+    // XXX: Note we are opting to use `Sentry.addGlobalEventProcessor` because it
+    // will attach to the "main" hub in Sentry's web app. The correct way should be
+    // to use `addGlobalEventProcessor` param in `setupOnce`.
 
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
@@ -257,6 +272,7 @@ export class SentryReplay implements Integration {
     this.session = getSession({
       expiry,
       stickySession: this.options.stickySession,
+      hub: this.hub,
     });
   }
 
@@ -369,7 +385,7 @@ export class SentryReplay implements Integration {
    **/
   createReplayEvent() {
     logger.log('CreateReplayEvent rootReplayId', this.session.id);
-    this.replayEvent = Sentry.getCurrentHub().startTransaction({
+    this.replayEvent = this.hub.startTransaction({
       name: REPLAY_EVENT_NAME,
       parentSpanId: this.session.spanId,
       traceId: this.session.traceId,
@@ -521,7 +537,7 @@ export class SentryReplay implements Integration {
     const events = this.events;
     this.events = [];
 
-    const client = Sentry.getCurrentHub().getClient();
+    const client = this.hub.getClient();
     const endpoint = SentryReplay.attachmentUrlFromDsn(
       client.getDsn(),
       eventId
