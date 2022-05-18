@@ -5,20 +5,19 @@ import App from './App';
 import * as serviceWorker from './serviceWorker';
 import * as Sentry from '@sentry/browser';
 import { SentryReplay } from '@sentry/replay';
-import { BrowserTracing, } from "@sentry/tracing";
 
 Sentry.init({
   // debug: true,
   // org/project: sentry-emerging-tech/replays
-  dsn:
-    'https://8616b02314c14ca1b499b098e1991eb5@o1176005.ingest.sentry.io/6273278',
+  dsn: 'http://c695ee8814214e3f90bcc13420c0ca3d@localhost:3001/3',
+  sendDefaultPii: true,
   environment: 'demo',
   tracesSampleRate: 1.0,
   integrations: [
-    new SentryReplay({stickySession: true}),
-    new BrowserTracing({
-      tracingOrigins: ["localhost:3000", "localhost", /^\//],
-    }),
+    new SentryReplay({ stickySession: true }),
+    // new BrowserTracing({
+    //   tracingOrigins: ["localhost:3000", "localhost", /^\//],
+    // }),
   ],
 });
 
