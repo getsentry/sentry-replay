@@ -1,47 +1,11 @@
 import * as Sentry from '@sentry/browser';
-import { DsnComponents, Event, Scope, Transaction } from '@sentry/types';
-
-import { record, getRecordConsolePlugin } from 'rrweb';
-import type { eventWithTime } from 'rrweb/typings/types';
-import {
-  createPerformanceEntries,
-  createMemoryEntry,
-  ReplayPerformanceEntry,
-} from './createPerformanceEntry';
-import { ReplaySession } from './session';
-import {
-  REPLAY_EVENT_NAME,
-  ROOT_REPLAY_NAME,
-  SESSION_IDLE_DURATION,
-  VISIBILITY_CHANGE_TIMEOUT,
-} from './session/constants';
+import { REPLAY_EVENT_NAME, SESSION_IDLE_DURATION } from './session/constants';
 import { getSession } from './session/getSession';
-import { updateSessionActivity } from './session/updateSessionActivity';
-import { isExpired } from './util/isExpired';
-import { isSessionExpired } from './util/isSessionExpired';
-import { logger } from './util/logger';
-import {
-  addInstrumentationHandler,
-  dateTimestampInSeconds,
-  safeJoin,
-  severityFromString,
-  uuid4,
-} from '@sentry/utils';
-import { BrowserClient, captureEvent, getCurrentHub } from '@sentry/browser';
-
-const handlers = [
-  'console', // -- think about PII
-  'dom', // also think about PII
-  'fetch',
-  'history',
-  'sentry',
-  'xhr',
-  'error',
-  'unhandledrejection',
-];
-// also need performance / measurement hooks
-type RRWebEvent = eventWithTime;
-type RRWebOptions = Parameters<typeof record>[0];
+import { ReplaySession } from './session/types';
+import { record } from 'rrweb';
+import { dateTimestampInSeconds, uuid4 } from '@sentry/utils';
+import { createEvent } from './util/createEvent';
+import { sendEvent } from './util/sendEvent';
 
 interface PluginOptions {
   /**
@@ -59,6 +23,7 @@ interface PluginOptions {
    */
   stickySession?: boolean;
 }
+type RRWebOptions = Parameters<typeof record>[0];
 
 interface SentryReplayConfiguration extends PluginOptions {
   /**
@@ -68,78 +33,11 @@ interface SentryReplayConfiguration extends PluginOptions {
 }
 
 export class SentryReplay {
-  /**
-   * @inheritDoc
-   */
-  public static id = 'Replay';
-
-  /**
-   * @inheritDoc
-   */
-  public name: string = SentryReplay.id;
-
-  /**
-   * Buffer of rrweb events that will be serialized as JSON and saved as an attachment to a Sentry event
-   */
-  public events: RRWebEvent[] = [];
-
-  public performanceEvents: PerformanceEntry[] = [];
-
-  public mockTx: Event;
-
-  public replayEvent: Event;
-
-  /**
-   * Options to pass to `rrweb.record()`
-   */
+  session: ReplaySession;
   readonly rrwebRecordOptions: RRWebOptions;
-
   readonly options: PluginOptions;
 
-  /**
-   * setTimeout id used for debouncing sending rrweb attachments
-   */
-  private timeout: number;
-
-  /**
-   * The timestamp of the first event since the last flush.
-   * This is used to determine if the maximum allowed time has passed before we should flush events again.
-   */
-  private initialEventTimestampSinceFlush: number | null = null;
-
-  private performanceObserver: PerformanceObserver | null = null;
-
-  session: ReplaySession | undefined;
-
-  static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
-    const { host, projectId, protocol, user } = dsn;
-
-    const port = dsn.port !== '' ? `:${dsn.port}` : '';
-    const path = dsn.path !== '' ? `/${dsn.path}` : '';
-
-    return `${protocol}://${host}${port}${path}/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
-  }
-
-  private createMockTx(): Event {
-    return {
-      type: 'transaction',
-      transaction: REPLAY_EVENT_NAME,
-      logentry: {
-        message: REPLAY_EVENT_NAME,
-      },
-      timestamp: dateTimestampInSeconds() + 1,
-      start_timestamp: dateTimestampInSeconds(),
-      breadcrumbs: [],
-      spans: [],
-      contexts: {
-        trace: {
-          trace_id: this.session.traceId,
-          span_id: uuid4().substring(16),
-        },
-      },
-    };
-  }
-
+  breadcrumbs: [];
   constructor({
     uploadMinDelay = 5000,
     uploadMaxDelay = 15000,
@@ -161,108 +59,27 @@ export class SentryReplay {
     };
 
     this.options = { uploadMinDelay, uploadMaxDelay, stickySession };
-    this.events = [];
+    // this.events = [];
   }
 
   setupOnce() {
-    /**
-     * Because we create a transaction in `setupOnce`, we can potentially create a
-     * transaction before some native SDK integrations have run and applied their
-     * own global event processor. An example is:
-     * https://github.com/getsentry/sentry-javascript/blob/b47ceafbdac7f8b99093ce6023726ad4687edc48/packages/browser/src/integrations/useragent.ts
-     *
-     * So we do this as a workaround to wait for other global event processors to finish
-     */
     window.setTimeout(() => this.setup());
   }
 
-  setup() {
-    this.loadSession({ expiry: SESSION_IDLE_DURATION });
-    this.mockTx = this.createMockTx();
-
-    // If there is no session, then something bad has happened - can't continue
-    if (!this.session) {
-      throw new Error('Invalid session');
-    }
-
-    for (const handler of handlers) {
-      addInstrumentationHandler(handler, (handlerData) => {
-        if (handler === 'console') {
-          this.mockTx.breadcrumbs.push({
-            timestamp: dateTimestampInSeconds(),
-            category: 'console',
-            data: {
-              arguments: handlerData.args,
-              logger: 'console',
-            },
-            level: severityFromString(handlerData.level),
-            message: safeJoin(handlerData.args, ' '),
-          });
-        }
-
-        if (handler == 'xhr' && handlerData.endTimestamp) {
-          console.log('xx', handlerData);
-          this.mockTx.spans.push({
-            data: {
-              size: 12044,
-            },
-            description: handlerData.args[1],
-            op: handlerData.args[0],
-            // parent_span_id: 'b55a07156ae2d7b3',
-            span_id: uuid4().substring(16),
-            trace_id: this.session.traceId,
-            start_timestamp: handlerData.startTimestamp / 1000.0 - 10,
-            timestamp: handlerData.endTimestamp / 1000.0,
-            // trace_id: 'c0056b1e75834053a40a79e261dc39bc',
-          });
-        }
-
-        if (handler == 'fetch' && handlerData.endTimestamp) {
-          this.mockTx.spans.push({
-            data: {
-              size: 12044,
-            },
-            description: handlerData.args[1],
-            op: handlerData.args[0],
-            // parent_span_id: 'b55a07156ae2d7b3',
-            span_id: uuid4().substring(16),
-            start_timestamp: handlerData.startTimestamp / 1000,
-            timestamp: handlerData.endTimestamp / 1000,
-            // trace_id: 'c0056b1e75834053a40a79e261dc39bc',
-          });
-        }
-      });
-    }
-    // addInstrumentationHandler('fetch', (data) => {
-    //   console.log(data, 'here?!');
-    // });
-    // addInstrumentationHandler('dom', (data) => {
-    //   console.log(data, 'here?!');
-    // });
-    // addInstrumentationHandler('console', (data) => {
-    //   console.log(data, 'here?!');
-    // });
-
-    // Tag all (non replay) events that get sent to Sentry with the current
-    // replay ID so that we can reference them later in the UI
-    Sentry.addGlobalEventProcessor((event: Event) => {
-      // Do not apply replayId to the root transaction
-      if (event.transaction === ROOT_REPLAY_NAME) {
-        event.breadcrumbs = null;
-        return event;
-      }
-      if (event.transaction === REPLAY_EVENT_NAME) {
-        // HACK!
-        event.breadcrumbs = this.mockTx.breadcrumbs;
-        this.mockTx = this.createMockTx();
-      }
-
-      event.tags = { ...event.tags, replayId: this.session.id };
-      return event;
+  loadSession({ expiry }: { expiry: number }): void {
+    this.session = getSession({
+      expiry,
+      stickySession: this.options.stickySession,
     });
+  }
 
-    // not fully initialized and the event will not get properly sent to Sentry
-    // this.createReplayEvent();
+  async setup() {
+    this.loadSession({ expiry: SESSION_IDLE_DURATION });
+    const hub = Sentry.getCurrentHub();
+    const { scope, client } = hub.getStackTop();
+    scope.addScopeListener((scope) => {
+      this.breadcrumbs.push(scope._breadcrumbs[scope._breadcrumbs.length - 1]);
+    });
 
     record({
       ...this.rrwebRecordOptions,
@@ -275,23 +92,23 @@ export class SentryReplay {
 
         // Timestamp of the first replay event since the last flush, this gets
         // reset when we finish the replay event
-        if (!this.initialEventTimestampSinceFlush) {
-          this.initialEventTimestampSinceFlush = now;
-        }
+        // if (!this.initialEventTimestampSinceFlush) {
+        //   this.initialEventTimestampSinceFlush = now;
+        // }
 
         // Do not finish the replay event if we receive a new replay event
-        if (this.timeout) {
-          window.clearTimeout(this.timeout);
-        }
+        // if (this.timeout) {
+        //   window.clearTimeout(this.timeout);
+        // }
 
         // If this is false, it means session is expired, create and a new session and wait for checkout
-        if (!this.checkAndHandleExpiredSession()) {
-          logger.error(
-            new Error('Received replay event after session expired.')
-          );
+        // if (!this.checkAndHandleExpiredSession()) {
+        //   logger.error(
+        //     new Error('Received replay event after session expired.')
+        //   );
 
-          return;
-        }
+        //   return;
+        // }
 
         // We need to clear existing events on a checkout, otherwise they are
         // incremental event updates and should be appended
@@ -300,7 +117,6 @@ export class SentryReplay {
         } else {
           this.events.push(event);
         }
-        console.log(this.mockTx.spans);
 
         // This event type is a fullsnapshot, we should save immediately when this occurs
         // See https://github.com/rrweb-io/rrweb/blob/d8f9290ca496712aa1e7d472549480c4e7876594/packages/rrweb/src/types.ts#L16
@@ -308,308 +124,49 @@ export class SentryReplay {
           // A fullsnapshot happens on initial load and if we need to start a
           // new replay due to idle timeout. In the latter case, a new session *should* have been started
           // before triggering a new checkout
-          this.finishReplayEvent();
+          // this.finishReplayEvent();
           return;
         }
 
-        const uploadMaxDelayExceeded = isExpired(
-          this.initialEventTimestampSinceFlush,
-          this.options.uploadMaxDelay,
-          now
-        );
+        // const uploadMaxDelayExceeded = isExpired(
+        //   this.initialEventTimestampSinceFlush,
+        //   this.options.uploadMaxDelay,
+        //   now
+        // );
 
         // If `uploadMaxDelayExceeded` is true, then we should finish the replay event immediately,
         // Otherwise schedule it to be finished in `this.options.uploadMinDelay`
-        if (uploadMaxDelayExceeded) {
-          logger.log('replay max delay exceeded, finishing replay event');
-          this.finishReplayEvent();
-          return;
-        }
+        // if (uploadMaxDelayExceeded) {
+        //   logger.log('replay max delay exceeded, finishing replay event');
+        //   this.finishReplayEvent();
+        //   return;
+        // }
 
         // Set timer to finish replay event and send replay attachment to
         // Sentry. Will be cancelled if an event happens before `uploadMinDelay`
         // elapses.
-        this.timeout = window.setTimeout(() => {
-          logger.log('replay timeout exceeded, finishing replay event');
-          this.finishReplayEvent();
-        }, this.options.uploadMinDelay);
+        // this.timeout = window.setTimeout(() => {
+        //   logger.log('replay timeout exceeded, finishing replay event');
+        //   this.finishReplayEvent();
+        // }, this.options.uploadMinDelay);
       },
     });
 
-    this.addListeners();
-  }
-
-  /**
-   * Currently, this needs to be manually called (e.g. for tests). Sentry SDK does not support a teardown
-   */
-  teardown() {
-    this.removeListeners();
-  }
-
-  /**
-   * Loads a session from storage, or creates a new one
-   */
-  loadSession({ expiry }: { expiry: number }): void {
-    this.session = getSession({
-      expiry,
-      stickySession: this.options.stickySession,
-    });
-  }
-
-  addListeners() {
-    document.addEventListener('visibilitychange', this.handleVisibilityChange);
-
-    if (!('PerformanceObserver' in window)) {
-      return;
-    }
-
-    this.performanceObserver = new PerformanceObserver(
-      this.handlePerformanceObserver
-    );
-
-    // Observe almost everything for now (no mark/measure)
-    [
-      'element',
-      'event',
-      'first-input',
-      'largest-contentful-paint',
-      'layout-shift',
-      'longtask',
-      'navigation',
-      'paint',
-      'resource',
-    ].forEach((type) =>
-      this.performanceObserver.observe({
-        type,
-        buffered: true,
-      })
-    );
-  }
-
-  removeListeners() {
-    document.removeEventListener(
-      'visibilitychange',
-      this.handleVisibilityChange
-    );
-
-    if (this.performanceObserver) {
-      this.performanceObserver.disconnect();
-      this.performanceObserver = null;
-    }
-  }
-
-  /**
-   * Keep a list of performance entries that will be sent with a replay
-   */
-  handlePerformanceObserver = (
-    list: PerformanceObserverEntryList
-    // observer: PerformanceObserver
-  ) => {
-    this.performanceEvents = [...this.performanceEvents, ...list.getEntries()];
-  };
-
-  /**
-   * Handle when visibility of the page changes. (e.g. new tab is opened)
-   */
-  handleVisibilityChange = () => {
-    const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
-
-    if (isExpired) {
-      if (document.visibilityState === 'visible') {
-        // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
-        // ms, we will re-use the existing session, otherwise create a new
-        // session
-        logger.log('Document has become active, but session has expired');
-        this.loadSession({ expiry: VISIBILITY_CHANGE_TIMEOUT });
-        this.triggerFullSnapshot();
-      }
-      // We definitely want to return if visibilityState is "visible", and I
-      // think we also want to do the same when "hidden", as there shouldn't be
-      // any action to take if user has gone idle for a long period and then
-      // comes back to hide the tab. We don't trigger a full snapshot because
-      // we don't want to start a new session as they immediately have hidden
-      // the tab.
-      return;
-    }
-
-    // Otherwise if session is not expired...
-
-    // Update with current timestamp as the last session activity
-    // Only updating session on visibility change to be conservative about
-    // writing to session storage. This could be changed in the future.
-    updateSessionActivity({
-      stickySession: this.options.stickySession,
-    });
-
-    // Send replay when the page/tab becomes hidden. There is no reason to send
-    // replay if it becomes visible, since no actions we care about were done
-    // while it was hidden
-    if (document.visibilityState !== 'visible') {
-      this.finishReplayEvent();
-    }
-  };
-
-  /**
-   * Trigger rrweb to take a full snapshot which will cause this plugin to
-   * create a new Replay event.
-   */
-  triggerFullSnapshot() {
-    logger.log('Taking full rrweb snapshot');
-    record.takeFullSnapshot(true);
-  }
-
-  /**
-   * This is our pseudo replay event disguised as a transaction. It will be
-   * used to store performance entries and breadcrumbs for every incremental
-   * replay event.
-   **/
-
-  /**
-   * Observed performance events are added to `this.performanceEvents`. These
-   * are included in the replay event before it is finished and sent to Sentry.
-   */
-  addPerformanceEntries() {
-    // Copy and reset entries before processing
-    const entries = [...this.performanceEvents];
-    this.performanceEvents = [];
-
-    // Parse the entries
-    const entryEvents = createPerformanceEntries(entries);
-
-    // window.performance.memory is a non-standard API and doesn't work on all browsers
-    // so we check before creating the event.
-    if ('memory' in window.performance) {
-      // @ts-expect-error memory doesn't exist on type Performance as the API is non-standard
-      entryEvents.push(createMemoryEntry(window.performance.memory));
-    }
-    // This current implementation is to create spans on the transaction referenced in `this.replayEvent`
-  }
-
-  /**
-   *
-   *
-   * Returns true if session is not expired, false otherwise.
-   */
-  checkAndHandleExpiredSession(expiry: number = SESSION_IDLE_DURATION) {
-    const oldSessionId = this.session.id;
-
-    // This will create a new session if expired, based on expiry length
-    this.loadSession({ expiry });
-
-    // Session was expired if session ids do not match
-    const isExpired = oldSessionId !== this.session.id;
-
-    if (!isExpired) {
-      return true;
-    }
-
-    // TODO: We could potentially figure out a way to save the last session,
-    // and produce a checkout based on a previous checkout + updates, and then
-    // replay the event on top. Or maybe replay the event on top of a refresh
-    // snapshot.
-
-    // For now create a new snapshot
-    this.triggerFullSnapshot();
-
-    return false;
-  }
-
-  async createReplayEvent() {
-    const id = await captureEvent(this.mockTx);
-    console.log('id:', id);
-  }
-
-  finishReplayEvent() {
-    if (!this.checkAndHandleExpiredSession()) {
-      logger.error(
-        new Error('Attempting to finish replay event after session expired.')
+    setInterval(() => {
+      console.log(this.session);
+      const event = createEvent(
+        uuid4(),
+        REPLAY_EVENT_NAME,
+        uuid4(),
+        uuid4().substring(16),
+        { replayId: this.session.id },
+        this.breadcrumbs
       );
-    }
-
-    if (!this.session.id) {
-      console.error(new Error('[Sentry]: No transaction, no replay'));
-      return;
-    }
-
-    this.sendReplay(this.session.id);
-    this.initialEventTimestampSinceFlush = null;
-    // TBD: Alternatively we could update this after every rrweb event
-    this.session.lastActivity = new Date().getTime();
-
-    // include performance entries
-    this.createReplayEvent();
-
-    // fetch()
-
-    // this.replayEvent?.setStatus('ok').finish();
-    // this.createReplayEvent();
-  }
-
-  /**
-   * Determine if there is browser support for `navigator.sendBeacon`
-   */
-  hasSendBeacon() {
-    return 'navigator' in window && 'sendBeacon' in window.navigator;
-  }
-
-  /**
-   * Send replay attachment using either `sendBeacon()` or `fetch()`
-   */
-  async sendReplayRequest(endpoint: string, events: RRWebEvent[]) {
-    const stringifiedPayload = JSON.stringify({ events });
-    const formData = new FormData();
-    formData.append(
-      'rrweb',
-      new Blob([stringifiedPayload], {
-        type: 'application/json',
-      }),
-      `rrweb-${new Date().getTime()}.json`
-    );
-
-    // If sendBeacon is supported and payload is smol enough...
-    if (this.hasSendBeacon() && stringifiedPayload.length <= 65536) {
-      logger.log(`uploading attachment via sendBeacon()`);
-      window.navigator.sendBeacon(endpoint, formData);
-      return;
-    }
-
-    // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
-    logger.log(`uploading attachment via fetch()`);
-    await fetch(endpoint, {
-      method: 'POST',
-      body: formData,
     });
-  }
-
-  /**
-   * Finalize and send the current replay event to Sentry
-   */
-  async sendReplay(eventId: string) {
-    // short circuit if theres no events to replay
-    if (!this.events.length) return;
-
-    // Make a copy of the events array reference and immediately clear the
-    // events member so that we do not lose new events while uploading
-    // attachment.
-    const events = this.events;
-    this.events = [];
-
-    const client = Sentry.getCurrentHub().getClient();
-    const endpoint = SentryReplay.attachmentUrlFromDsn(
-      client.getDsn(),
-      eventId
-    );
-
-    try {
-      await this.sendReplayRequest(endpoint, events);
-      return true;
-    } catch (ex) {
-      // we have to catch this otherwise it throws an infinite loop in Sentry
-      console.error(ex);
-
-      // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
-      this.events = [...events, ...this.events];
-      return false;
-    }
+    //   console.log(event);
+    //   sendEvent(event);
+    //   console.log('creating update event');
+    //   this.breadcrumbs = [];
+    // }, 5000);
   }
 }
