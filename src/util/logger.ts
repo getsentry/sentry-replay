@@ -12,10 +12,10 @@ function wrapLogger(logFn: typeof sentryLogger[keyof typeof sentryLogger]) {
 }
 
 const logger = {
-  ...sentryLogger,
+  ...console,
   error: wrapLogger(sentryLogger.error),
   warn: wrapLogger(sentryLogger.warn),
-  log: wrapLogger(sentryLogger.log),
+  log: console.log,
 };
 
 export { logger };

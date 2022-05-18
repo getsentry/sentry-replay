@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/browser';
 import { DsnComponents, Event, Scope, Transaction } from '@sentry/types';
 
-import { record } from 'rrweb';
+import { record, getRecordConsolePlugin } from 'rrweb';
 import type { eventWithTime } from 'rrweb/typings/types';
 import {
   createPerformanceEntries,
@@ -20,7 +20,26 @@ import { updateSessionActivity } from './session/updateSessionActivity';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
+import {
+  addInstrumentationHandler,
+  dateTimestampInSeconds,
+  safeJoin,
+  severityFromString,
+  uuid4,
+} from '@sentry/utils';
+import { BrowserClient, captureEvent, getCurrentHub } from '@sentry/browser';
 
+const handlers = [
+  'console', // -- think about PII
+  'dom', // also think about PII
+  'fetch',
+  'history',
+  'sentry',
+  'xhr',
+  'error',
+  'unhandledrejection',
+];
+// also need performance / measurement hooks
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
 
@@ -66,12 +85,9 @@ export class SentryReplay {
 
   public performanceEvents: PerformanceEntry[] = [];
 
-  /**
-   * A Sentry Transaction that should capture every incremental rrweb update,
-   * but *not* the attachments themselves. This is currently used to capture
-   * breadcrumbs and maybe other spans (e.g. network requests)
-   */
-  replayEvent: Transaction | undefined;
+  public mockTx: Event;
+
+  public replayEvent: Event;
 
   /**
    * Options to pass to `rrweb.record()`
@@ -102,6 +118,26 @@ export class SentryReplay {
     const path = dsn.path !== '' ? `/${dsn.path}` : '';
 
     return `${protocol}://${host}${port}${path}/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
+  }
+
+  private createMockTx(): Event {
+    return {
+      type: 'transaction',
+      transaction: REPLAY_EVENT_NAME,
+      logentry: {
+        message: REPLAY_EVENT_NAME,
+      },
+      timestamp: dateTimestampInSeconds() + 1,
+      start_timestamp: dateTimestampInSeconds(),
+      breadcrumbs: [],
+      spans: [],
+      contexts: {
+        trace: {
+          trace_id: this.session.traceId,
+          span_id: uuid4().substring(16),
+        },
+      },
+    };
   }
 
   constructor({
@@ -142,18 +178,83 @@ export class SentryReplay {
 
   setup() {
     this.loadSession({ expiry: SESSION_IDLE_DURATION });
+    this.mockTx = this.createMockTx();
 
     // If there is no session, then something bad has happened - can't continue
     if (!this.session) {
       throw new Error('Invalid session');
     }
 
+    for (const handler of handlers) {
+      addInstrumentationHandler(handler, (handlerData) => {
+        if (handler === 'console') {
+          this.mockTx.breadcrumbs.push({
+            timestamp: dateTimestampInSeconds(),
+            category: 'console',
+            data: {
+              arguments: handlerData.args,
+              logger: 'console',
+            },
+            level: severityFromString(handlerData.level),
+            message: safeJoin(handlerData.args, ' '),
+          });
+        }
+
+        if (handler == 'xhr' && handlerData.endTimestamp) {
+          console.log('xx', handlerData);
+          this.mockTx.spans.push({
+            data: {
+              size: 12044,
+            },
+            description: handlerData.args[1],
+            op: handlerData.args[0],
+            // parent_span_id: 'b55a07156ae2d7b3',
+            span_id: uuid4().substring(16),
+            trace_id: this.session.traceId,
+            start_timestamp: handlerData.startTimestamp / 1000.0 - 10,
+            timestamp: handlerData.endTimestamp / 1000.0,
+            // trace_id: 'c0056b1e75834053a40a79e261dc39bc',
+          });
+        }
+
+        if (handler == 'fetch' && handlerData.endTimestamp) {
+          this.mockTx.spans.push({
+            data: {
+              size: 12044,
+            },
+            description: handlerData.args[1],
+            op: handlerData.args[0],
+            // parent_span_id: 'b55a07156ae2d7b3',
+            span_id: uuid4().substring(16),
+            start_timestamp: handlerData.startTimestamp / 1000,
+            timestamp: handlerData.endTimestamp / 1000,
+            // trace_id: 'c0056b1e75834053a40a79e261dc39bc',
+          });
+        }
+      });
+    }
+    // addInstrumentationHandler('fetch', (data) => {
+    //   console.log(data, 'here?!');
+    // });
+    // addInstrumentationHandler('dom', (data) => {
+    //   console.log(data, 'here?!');
+    // });
+    // addInstrumentationHandler('console', (data) => {
+    //   console.log(data, 'here?!');
+    // });
+
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
     Sentry.addGlobalEventProcessor((event: Event) => {
       // Do not apply replayId to the root transaction
       if (event.transaction === ROOT_REPLAY_NAME) {
+        event.breadcrumbs = null;
         return event;
+      }
+      if (event.transaction === REPLAY_EVENT_NAME) {
+        // HACK!
+        event.breadcrumbs = this.mockTx.breadcrumbs;
+        this.mockTx = this.createMockTx();
       }
 
       event.tags = { ...event.tags, replayId: this.session.id };
@@ -161,7 +262,7 @@ export class SentryReplay {
     });
 
     // not fully initialized and the event will not get properly sent to Sentry
-    this.createReplayEvent();
+    // this.createReplayEvent();
 
     record({
       ...this.rrwebRecordOptions,
@@ -199,6 +300,7 @@ export class SentryReplay {
         } else {
           this.events.push(event);
         }
+        console.log(this.mockTx.spans);
 
         // This event type is a fullsnapshot, we should save immediately when this occurs
         // See https://github.com/rrweb-io/rrweb/blob/d8f9290ca496712aa1e7d472549480c4e7876594/packages/rrweb/src/types.ts#L16
@@ -361,34 +463,6 @@ export class SentryReplay {
    * used to store performance entries and breadcrumbs for every incremental
    * replay event.
    **/
-  createReplayEvent() {
-    logger.log('CreateReplayEvent rootReplayId', this.session.id);
-    this.replayEvent = Sentry.getCurrentHub().startTransaction({
-      name: REPLAY_EVENT_NAME,
-      parentSpanId: this.session.spanId,
-      traceId: this.session.traceId,
-      tags: {
-        replayId: this.session.id,
-      },
-    });
-    Sentry.configureScope((scope: Scope) => scope.setSpan(this.replayEvent));
-    return this.replayEvent;
-  }
-
-  /**
-   * Create a span for each performance entry. The parent transaction is `this.replayEvent`.
-   */
-  createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
-    entries.forEach(({ type, start, end, name, data }) => {
-      const span = this.replayEvent?.startChild({
-        op: type,
-        description: name,
-        startTimestamp: start,
-        data,
-      });
-      span.finish(end);
-    });
-  }
 
   /**
    * Observed performance events are added to `this.performanceEvents`. These
@@ -409,7 +483,6 @@ export class SentryReplay {
       entryEvents.push(createMemoryEntry(window.performance.memory));
     }
     // This current implementation is to create spans on the transaction referenced in `this.replayEvent`
-    this.createPerformanceSpans(entryEvents);
   }
 
   /**
@@ -441,6 +514,11 @@ export class SentryReplay {
     return false;
   }
 
+  async createReplayEvent() {
+    const id = await captureEvent(this.mockTx);
+    console.log('id:', id);
+  }
+
   finishReplayEvent() {
     if (!this.checkAndHandleExpiredSession()) {
       logger.error(
@@ -459,11 +537,12 @@ export class SentryReplay {
     this.session.lastActivity = new Date().getTime();
 
     // include performance entries
-    this.addPerformanceEntries();
-
-    // Close out existing replay event and create a new one
-    this.replayEvent?.setStatus('ok').finish();
     this.createReplayEvent();
+
+    // fetch()
+
+    // this.replayEvent?.setStatus('ok').finish();
+    // this.createReplayEvent();
   }
 
   /**

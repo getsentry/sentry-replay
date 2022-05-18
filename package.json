@@ -6,7 +6,7 @@
   "module": "dist/index.es.js",
   "scripts": {
     "bootstrap": "yarn && cd demo && yarn",
-    "build": "NODE_ENV=production yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
+    "build": "NODE_ENV=development yarn rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
     "clean": "yarn rimraf dist",
     "lint": "yarn eslint . --ext .js,.jsx,.ts,.tsx",
     "prepare": "husky install",
