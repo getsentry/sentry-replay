@@ -158,18 +158,22 @@ export class SentryReplay {
     });
 
     addInstrumentationHandler('xhr', (handlerData) => {
+      console.log(1);
+      if (handlerData.startTimestamp) {
+        handlerData.xhr.__sentry_xhr__.startTimestamp =
+          handlerData.startTimestamp;
+      }
       if (handlerData.endTimestamp) {
-        console.log('xx', handlerData);
+        console.log('0', handlerData);
         this.spans.push({
-          data: {
-            size: 12044,
-          },
           description: handlerData.args[1],
           op: handlerData.args[0],
           parent_span_id: this.session.spanId,
           span_id: uuid4().substring(16),
           trace_id: this.session.traceId,
-          start_timestamp: handlerData.startTimestamp / 1000.0 - 10,
+          start_timestamp:
+            handlerData.xhr.__sentry_xhr__.startTimestamp / 1000 ||
+            handlerData.endTimestamp / 1000.0,
           timestamp: handlerData.endTimestamp / 1000.0,
         });
       }
@@ -178,9 +182,6 @@ export class SentryReplay {
     addInstrumentationHandler('fetch', (handlerData) => {
       if (handlerData.endTimestamp) {
         this.spans.push({
-          data: {
-            size: 12044,
-          },
           description: handlerData.args[1],
           op: handlerData.args[0],
           parent_span_id: this.session.spanId,
@@ -411,15 +412,18 @@ export class SentryReplay {
    * Create a span for each performance entry. The parent transaction is `this.replayEvent`.
    */
   createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
-    // entries.forEach(({ type, start, end, name, data }) => {
-    //   const span = this.replayEvent?.startChild({
-    //     op: type,
-    //     description: name,
-    //     startTimestamp: start,
-    //     data,
-    //   });
-    //   span.finish(end);
-    // });
+    entries.forEach(({ type, start, end, name, data }) => {
+      this.spans.push({
+        op: type,
+        description: name,
+        start_timestamp: start,
+        timestamp: end,
+        parent_span_id: this.session.spanId,
+        trace_id: this.session.traceId,
+        span_id: uuid4().substring(16),
+        data,
+      });
+    });
   }
 
   /**
@@ -440,7 +444,6 @@ export class SentryReplay {
       // @ts-expect-error memory doesn't exist on type Performance as the API is non-standard
       entryEvents.push(createMemoryEntry(window.performance.memory));
     }
-    // This current implementation is to create spans on the transaction referenced in `this.replayEvent`
     this.createPerformanceSpans(entryEvents);
   }
 
@@ -492,7 +495,6 @@ export class SentryReplay {
 
     // include performance entries
     this.addPerformanceEntries();
-    console.log(JSON.stringify(this.breadcrumbs));
     const event = createEvent(
       uuid4(),
       REPLAY_EVENT_NAME,

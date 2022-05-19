@@ -10,5 +10,6 @@ export function sendEvent(replayEvent: ReplayEvent) {
   // @ts-expect-error using private normalize method
   const normalized = client._normalizeEvent(replayEvent, 3);
   // @ts-expect-error using private backend method
+  console.log(normalized);
   client._backend.sendEvent(normalized);
 }
