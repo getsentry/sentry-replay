@@ -29,18 +29,6 @@ export function createSession({
     lastActivity: currentDate,
   };
 
-  // const replayEvent = createEvent(
-  //   session.id,
-  //   ROOT_REPLAY_NAME,
-  //   session.traceId,
-  //   session.spanId,
-  //   {
-  //     isReplayRoot: 'yes',
-  //   },
-  //   []
-  // );
-  // sendEvent(replayEvent);
-
   logger.log(`Creating new session: ${session.id}`);
 
   if (stickySession) {

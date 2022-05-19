@@ -21,7 +21,6 @@ import { ReplaySpan } from './types';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-// import { sendEvent } from './util/sendEvent';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];

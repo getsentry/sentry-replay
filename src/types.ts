@@ -14,23 +14,3 @@ export interface ReplaySpan {
 export interface Tags {
   [key: string]: string;
 }
-export interface ReplayEvent {
-  request: {
-    url: string;
-  };
-  event_id: string;
-  type: string;
-  transaction: string;
-  spans: ReplaySpan[];
-  breadcrumbs: Breadcrumb[];
-  timestamp: number;
-  start_timestamp: number;
-  contexts: {
-    trace: {
-      trace_id: string;
-      span_id: string;
-      tags: { replayId: string };
-    };
-  };
-  tags: Tags;
-}
