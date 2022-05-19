@@ -151,7 +151,7 @@ export class SentryReplay {
 
       this.breadcrumbs.push(newBreadcrumb);
     });
-
+    // TODO: add status code into data, etc.
     addInstrumentationHandler('xhr', (handlerData) => {
       if (handlerData.startTimestamp) {
         handlerData.xhr.__sentry_xhr__.startTimestamp =
