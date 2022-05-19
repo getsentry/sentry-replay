@@ -69,13 +69,6 @@ export class SentryReplay {
   public performanceEvents: PerformanceEntry[] = [];
 
   /**
-   * A Sentry Transaction that should capture every incremental rrweb update,
-   * but *not* the attachments themselves. This is currently used to capture
-   * breadcrumbs and maybe other spans (e.g. network requests)
-   */
-  // replayEvent: Transaction | undefined;
-
-  /**
    * Options to pass to `rrweb.record()`
    */
   readonly rrwebRecordOptions: RRWebOptions;
