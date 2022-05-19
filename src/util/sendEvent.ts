@@ -9,7 +9,7 @@ export function sendEvent(replayEvent: ReplayEvent) {
   _addContext(replayEvent, scope);
   // @ts-expect-error using private normalize method
   const normalized = client._normalizeEvent(replayEvent, 3);
-  // @ts-expect-error using private backend method
   console.log(normalized);
+  // @ts-expect-error using private backend method
   client._backend.sendEvent(normalized);
 }

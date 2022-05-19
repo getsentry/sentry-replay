@@ -4,17 +4,11 @@ import type { eventWithTime } from 'rrweb/typings/types';
 export type RRWebEvent = eventWithTime;
 
 export interface ReplaySpan {
-  data: {
-    size: number;
-  };
   description: string;
   op: string;
-  parent_span_id: string;
-  span_id: string;
-  trace_id: string;
-  start_timestamp: number;
-  timestamp: number;
-  // trace_id: 'c0056b1e75834053a40a79e261dc39bc',
+  startTimestamp: number;
+  endTimestamp: number;
+  data?: Record<string, unknown>;
 }
 
 export interface Tags {

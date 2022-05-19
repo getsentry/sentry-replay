@@ -11,7 +11,6 @@ import {
 } from './createPerformanceEntry';
 import { ReplaySession } from './session';
 import {
-  REPLAY_EVENT_NAME,
   ROOT_REPLAY_NAME,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
@@ -19,11 +18,10 @@ import {
 import { getSession } from './session/getSession';
 import { updateSessionActivity } from './session/updateSessionActivity';
 import { ReplaySpan } from './types';
-import { createEvent } from './util/createEvent';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-import { sendEvent } from './util/sendEvent';
+// import { sendEvent } from './util/sendEvent';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
@@ -154,27 +152,28 @@ export class SentryReplay {
 
     scope.addScopeListener((scope) => {
       //@ts-expect-error using private val
-      this.breadcrumbs.push(scope._breadcrumbs[scope._breadcrumbs.length - 1]);
+      const newBreadcrumb = scope._breadcrumbs[scope._breadcrumbs.length - 1];
+
+      if (['fetch', 'xhr'].includes(newBreadcrumb.category)) {
+        return;
+      }
+
+      this.breadcrumbs.push(newBreadcrumb);
     });
 
     addInstrumentationHandler('xhr', (handlerData) => {
-      console.log(1);
       if (handlerData.startTimestamp) {
         handlerData.xhr.__sentry_xhr__.startTimestamp =
           handlerData.startTimestamp;
       }
       if (handlerData.endTimestamp) {
-        console.log('0', handlerData);
         this.spans.push({
           description: handlerData.args[1],
           op: handlerData.args[0],
-          parent_span_id: this.session.spanId,
-          span_id: uuid4().substring(16),
-          trace_id: this.session.traceId,
-          start_timestamp:
+          startTimestamp:
             handlerData.xhr.__sentry_xhr__.startTimestamp / 1000 ||
             handlerData.endTimestamp / 1000.0,
-          timestamp: handlerData.endTimestamp / 1000.0,
+          endTimestamp: handlerData.endTimestamp / 1000.0,
         });
       }
     });
@@ -184,11 +183,8 @@ export class SentryReplay {
         this.spans.push({
           description: handlerData.args[1],
           op: handlerData.args[0],
-          parent_span_id: this.session.spanId,
-          span_id: uuid4().substring(16),
-          start_timestamp: handlerData.startTimestamp / 1000,
-          timestamp: handlerData.endTimestamp / 1000,
-          trace_id: this.session.traceId,
+          startTimestamp: handlerData.startTimestamp / 1000,
+          endTimestamp: handlerData.endTimestamp / 1000,
         });
       }
     });
@@ -416,11 +412,8 @@ export class SentryReplay {
       this.spans.push({
         op: type,
         description: name,
-        start_timestamp: start,
-        timestamp: end,
-        parent_span_id: this.session.spanId,
-        trace_id: this.session.traceId,
-        span_id: uuid4().substring(16),
+        startTimestamp: start,
+        endTimestamp: end,
         data,
       });
     });
@@ -488,29 +481,11 @@ export class SentryReplay {
       return;
     }
 
+    this.addPerformanceEntries();
     this.sendReplay(this.session.id);
     this.initialEventTimestampSinceFlush = null;
     // TBD: Alternatively we could update this after every rrweb event
     this.session.lastActivity = new Date().getTime();
-
-    // include performance entries
-    this.addPerformanceEntries();
-    const event = createEvent(
-      uuid4(),
-      REPLAY_EVENT_NAME,
-      this.session.traceId,
-      uuid4().substring(16),
-      { replayId: this.session.id },
-      this.breadcrumbs,
-      this.spans
-    );
-    sendEvent(event);
-    this.spans = [];
-    this.breadcrumbs = [];
-
-    // Close out existing replay event and create a new one
-    // this.replayEvent?.setStatus('ok').finish();
-    // this.createReplayEvent();
   }
 
   /**
@@ -523,8 +498,17 @@ export class SentryReplay {
   /**
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
-  async sendReplayRequest(endpoint: string, events: RRWebEvent[]) {
-    const stringifiedPayload = JSON.stringify({ events });
+  async sendReplayRequest(
+    endpoint: string,
+    events: RRWebEvent[],
+    replaySpans: ReplaySpan[],
+    breadcrumbs: Breadcrumb[]
+  ) {
+    const stringifiedPayload = JSON.stringify({
+      recording: events,
+      replaySpans: replaySpans,
+      breadcrumbs: breadcrumbs,
+    });
     const formData = new FormData();
     formData.append(
       'rrweb',
@@ -560,6 +544,10 @@ export class SentryReplay {
     // events member so that we do not lose new events while uploading
     // attachment.
     const events = this.events;
+    const spans = this.spans;
+    const breadcrumbs = this.breadcrumbs;
+    this.spans = [];
+    this.breadcrumbs = [];
     this.events = [];
 
     const client = Sentry.getCurrentHub().getClient();
@@ -569,7 +557,7 @@ export class SentryReplay {
     );
 
     try {
-      await this.sendReplayRequest(endpoint, events);
+      await this.sendReplayRequest(endpoint, events, spans, breadcrumbs);
       return true;
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry
