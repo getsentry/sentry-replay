@@ -2,9 +2,7 @@ import { logger } from '@/util/logger';
 import { saveSession } from './saveSession';
 import type { ReplaySession } from './types';
 import { ROOT_REPLAY_NAME } from './constants';
-import { uuid4 } from '@sentry/utils';
-import { createEvent } from '@/util/createEvent';
-import { sendEvent } from '@/util/sendEvent';
+import { captureEvent } from '@sentry/browser';
 
 interface CreateSessionParams {
   /**
@@ -22,26 +20,26 @@ export function createSession({
   stickySession = false,
 }: CreateSessionParams): ReplaySession {
   const currentDate = new Date().getTime();
-
+  const id = captureEvent({
+    message: ROOT_REPLAY_NAME,
+  });
   const session = {
-    id: uuid4(),
-    traceId: uuid4(),
-    spanId: uuid4().substring(16),
+    id: id,
     started: currentDate,
     lastActivity: currentDate,
   };
 
-  const replayEvent = createEvent(
-    session.id,
-    ROOT_REPLAY_NAME,
-    session.traceId,
-    session.spanId,
-    {
-      isReplayRoot: 'yes',
-    },
-    []
-  );
-  sendEvent(replayEvent);
+  // const replayEvent = createEvent(
+  //   session.id,
+  //   ROOT_REPLAY_NAME,
+  //   session.traceId,
+  //   session.spanId,
+  //   {
+  //     isReplayRoot: 'yes',
+  //   },
+  //   []
+  // );
+  // sendEvent(replayEvent);
 
   logger.log(`Creating new session: ${session.id}`);
 

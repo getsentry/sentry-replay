@@ -141,7 +141,6 @@ export class SentryReplay {
   setup() {
     const hub = Sentry.getCurrentHub();
     const { scope } = hub.getStackTop();
-    Sentry.setUser({ email: 'john.doe@example.com' });
 
     scope.addScopeListener((scope) => {
       //@ts-expect-error using private val
@@ -200,9 +199,6 @@ export class SentryReplay {
       event.tags = { ...event.tags, replayId: this.session.id };
       return event;
     });
-
-    // not fully initialized and the event will not get properly sent to Sentry
-    // this.createReplayEvent();
 
     record({
       ...this.rrwebRecordOptions,

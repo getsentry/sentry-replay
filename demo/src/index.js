@@ -4,6 +4,8 @@ import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
 import * as Sentry from '@sentry/browser';
+import { BrowserTracing } from '@sentry/tracing';
+
 import { SentryReplay } from '@sentry/replay';
 
 Sentry.init({
@@ -16,7 +18,7 @@ Sentry.init({
   integrations: [
     new SentryReplay({ stickySession: true }),
     // new BrowserTracing({
-    //   tracingOrigins: ["localhost:3000", "localhost", /^\//],
+    //   tracingOrigins: ['localhost:3000', 'localhost', /^\//],
     // }),
   ],
 });
