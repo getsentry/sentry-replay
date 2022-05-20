@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/browser';
-import { Breadcrumb, DsnComponents, Event } from '@sentry/types';
-import { addInstrumentationHandler, uuid4 } from '@sentry/utils';
+import { addInstrumentationHandler } from '@sentry/utils';
+import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
 import { record } from 'rrweb';
 import type { eventWithTime } from 'rrweb/typings/types';
@@ -49,7 +49,7 @@ interface SentryReplayConfiguration extends PluginOptions {
   rrwebConfig?: RRWebOptions;
 }
 
-export class SentryReplay {
+export class SentryReplay implements Integration {
   /**
    * @inheritDoc
    */
@@ -93,12 +93,12 @@ export class SentryReplay {
   session: ReplaySession | undefined;
 
   static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
-    const { host, projectId, protocol, user } = dsn;
+    const { host, projectId, protocol, publicKey } = dsn;
 
     const port = dsn.port !== '' ? `:${dsn.port}` : '';
     const path = dsn.path !== '' ? `/${dsn.path}` : '';
 
-    return `${protocol}://${host}${port}${path}/api/${projectId}/events/${eventId}/attachments/?sentry_key=${user}&sentry_version=7&sentry_client=replay`;
+    return `${protocol}://${host}${port}${path}/api/${projectId}/events/${eventId}/attachments/?sentry_key=${publicKey}&sentry_version=7&sentry_client=replay`;
   }
 
   constructor({
