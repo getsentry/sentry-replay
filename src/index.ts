@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/browser';
-import { addInstrumentationHandler } from '@sentry/utils';
+import { addInstrumentationHandler, uuid4 } from '@sentry/utils';
 import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
 import { record } from 'rrweb';
@@ -11,6 +11,7 @@ import {
 } from './createPerformanceEntry';
 import { ReplaySession } from './session';
 import {
+  REPLAY_EVENT_NAME,
   ROOT_REPLAY_NAME,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
@@ -21,6 +22,7 @@ import { ReplaySpan } from './types';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
+import { captureEvent } from '@sentry/browser';
 
 type RRWebEvent = eventWithTime;
 type RRWebOptions = Parameters<typeof record>[0];
@@ -468,9 +470,14 @@ export class SentryReplay implements Integration {
       console.error(new Error('[Sentry]: No transaction, no replay'));
       return;
     }
+    // TEMP: keep sending a replay event just for the duration
+    captureEvent({
+      message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
+    });
 
     this.addPerformanceEntries();
     this.sendReplay(this.session.id);
+
     this.initialEventTimestampSinceFlush = null;
     // TBD: Alternatively we could update this after every rrweb event
     this.session.lastActivity = new Date().getTime();
