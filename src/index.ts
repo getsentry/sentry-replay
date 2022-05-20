@@ -1,5 +1,9 @@
 import * as Sentry from '@sentry/browser';
-import { addInstrumentationHandler, uuid4 } from '@sentry/utils';
+import {
+  addInstrumentationHandler,
+  htmlTreeAsString,
+  uuid4,
+} from '@sentry/utils';
 import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
 import { record } from 'rrweb';
@@ -147,12 +151,47 @@ export class SentryReplay implements Integration {
       //@ts-expect-error using private val
       const newBreadcrumb = scope._breadcrumbs[scope._breadcrumbs.length - 1];
 
-      if (['fetch', 'xhr'].includes(newBreadcrumb.category)) {
+      if (
+        ['fetch', 'xhr'].includes(newBreadcrumb.category) ||
+        newBreadcrumb.category.startsWith('ui.')
+      ) {
         return;
       }
 
-      this.breadcrumbs.push(newBreadcrumb);
+      this.breadcrumbs.push({ type: 'default', ...newBreadcrumb });
     });
+
+    addInstrumentationHandler('dom', (handlerData) => {
+      // Taken from https://github.com/getsentry/sentry-javascript/blob/master/packages/browser/src/integrations/breadcrumbs.ts#L112
+      let target;
+      let targetNode;
+
+      // Accessing event.target can throw (see getsentry/raven-js#838, #768)
+      try {
+        targetNode =
+          (handlerData.event.target as Node) ||
+          (handlerData.event as unknown as Node);
+        target = htmlTreeAsString(targetNode);
+      } catch (e) {
+        target = '<unknown>';
+      }
+
+      if (target.length === 0) {
+        return;
+      }
+
+      this.breadcrumbs.push({
+        timestamp: new Date().getTime() / 1000,
+        type: 'default',
+        category: `ui.${handlerData.name}`,
+        message: target,
+        data: {
+          // @ts-expect-error Not sure why this errors, Node should be correct (Argument of type 'Node' is not assignable to parameter of type 'INode')
+          nodeId: targetNode ? record.mirror.getId(targetNode) : undefined,
+        },
+      });
+    });
+
     // TODO: add status code into data, etc.
     addInstrumentationHandler('xhr', (handlerData) => {
       if (handlerData.startTimestamp) {
@@ -473,6 +512,9 @@ export class SentryReplay implements Integration {
     // TEMP: keep sending a replay event just for the duration
     captureEvent({
       message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
+      tags: {
+        replayId: this.session.id,
+      },
     });
 
     this.addPerformanceEntries();
