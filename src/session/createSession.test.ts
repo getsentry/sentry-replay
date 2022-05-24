@@ -5,6 +5,8 @@ import { isJsxSelfClosingElement } from 'typescript';
 import { createSession } from './createSession';
 import { saveSession } from './saveSession';
 
+type captureEventMockType = jest.MockedFunction<typeof Sentry.captureEvent>;
+
 jest.mock('@sentry/browser', () => {
   const mockCaptureEvent = jest.fn();
   const mockGetCurrentHub = jest.fn(() => {
@@ -20,8 +22,7 @@ jest.mock('./saveSession');
 
 jest.mock('@sentry/utils', () => {
   return {
-    // @ts-expect-error idk
-    ...jest.requireActual('@sentry/utils'),
+    ...(jest.requireActual('@sentry/utils') as { string: unknown }),
     uuid4: jest.fn(() => 'test_session_id'),
   };
 });
@@ -43,7 +44,7 @@ it('creates a new session with no sticky sessions', function () {
   expect(newSession.id).toBe('test_session_id');
   expect(newSession.started).toBeGreaterThan(0);
   expect(newSession.lastActivity).toEqual(newSession.started);
-  //@ts-expect-error typing
+
   Sentry.getCurrentHub().captureEvent.mockReset();
 });
 
@@ -63,6 +64,8 @@ it('creates a new session with sticky sessions', function () {
   expect(newSession.id).toBe('test_session_id');
   expect(newSession.started).toBeGreaterThan(0);
   expect(newSession.lastActivity).toEqual(newSession.started);
-  //@ts-expect-error typing
-  Sentry.getCurrentHub().captureEvent.mockReset();
+  const captureMock = Sentry.getCurrentHub()
+    .captureEvent as captureEventMockType;
+
+  captureMock.mockReset();
 });

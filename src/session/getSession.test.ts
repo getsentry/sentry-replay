@@ -17,8 +17,7 @@ jest.mock('@sentry/browser', () => {
 
 jest.mock('@sentry/utils', () => {
   return {
-    // @ts-expect-error idk
-    ...jest.requireActual('@sentry/utils'),
+    ...(jest.requireActual('@sentry/utils') as { string: unknown }),
     uuid4: jest.fn(() => 'test_session_id'),
   };
 });

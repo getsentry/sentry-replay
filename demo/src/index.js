@@ -9,10 +9,9 @@ import { BrowserTracing } from '@sentry/tracing';
 import { SentryReplay } from '@sentry/replay';
 
 Sentry.init({
-  debug: true,
+  // debug: true,
   // org/project: sentry-emerging-tech/replays
   dsn: 'http://c695ee8814214e3f90bcc13420c0ca3d@localhost:3001/3',
-  sendDefaultPii: true,
   environment: 'demo',
   tracesSampleRate: 1.0,
   integrations: [
@@ -29,4 +28,4 @@ ReactDOM.render(<App />, document.getElementById('root'));
 // Learn more about service workers: https://bit.ly/CRA-PWA
 serviceWorker.unregister();
 
-setTimeout(() => console.log('test!z'), 1000);
+setTimeout(() => console.log('test console breadcrumb!!'), 1000);
