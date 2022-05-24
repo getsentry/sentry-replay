@@ -193,12 +193,12 @@ describe('SentryReplay', () => {
     const regex = new RegExp(
       'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
     );
-    expect(replay.sendReplayRequest).toHaveBeenCalledWith(
-      expect.stringMatching(regex),
-      [TEST_EVENT],
-      [],
-      []
-    );
+    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
+      endpoint: expect.stringMatching(regex),
+      events: [TEST_EVENT],
+      replaySpans: [],
+      breadcrumbs: [],
+    });
 
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
@@ -219,12 +219,12 @@ describe('SentryReplay', () => {
     const regex = new RegExp(
       'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
     );
-    expect(replay.sendReplayRequest).toHaveBeenCalledWith(
-      expect.stringMatching(regex),
-      [TEST_EVENT],
-      [],
-      []
-    );
+    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
+      endpoint: expect.stringMatching(regex),
+      events: [TEST_EVENT],
+      replaySpans: [],
+      breadcrumbs: [],
+    });
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);

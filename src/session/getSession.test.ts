@@ -3,18 +3,6 @@ import * as FetchSession from './fetchSession';
 import { getSession } from './getSession';
 import { saveSession } from './saveSession';
 
-jest.mock('@sentry/browser', () => {
-  const mockCaptureEvent = jest.fn();
-  const mockGetCurrentHub = jest.fn(() => {
-    return {
-      captureEvent: mockCaptureEvent,
-    };
-  });
-  return {
-    getCurrentHub: mockGetCurrentHub,
-  };
-});
-
 jest.mock('@sentry/utils', () => {
   return {
     ...(jest.requireActual('@sentry/utils') as { string: unknown }),

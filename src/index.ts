@@ -1,9 +1,5 @@
 import * as Sentry from '@sentry/browser';
-import {
-  addInstrumentationHandler,
-  htmlTreeAsString,
-  uuid4,
-} from '@sentry/utils';
+import { uuid4 } from '@sentry/utils';
 import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
 import { record } from 'rrweb';
@@ -56,6 +52,13 @@ interface SentryReplayConfiguration extends PluginOptions {
   rrwebConfig?: RRWebOptions;
 }
 
+interface ReplayRequest {
+  endpoint: string;
+  events: RRWebEvent[];
+  replaySpans: ReplaySpan[];
+  breadcrumbs: Breadcrumb[];
+}
+
 export class SentryReplay implements Integration {
   /**
    * @inheritDoc
@@ -93,7 +96,7 @@ export class SentryReplay implements Integration {
    * This is used to determine if the maximum allowed time has passed before we should flush events again.
    */
   private initialEventTimestampSinceFlush: number | null = null;
-  public spans: ReplaySpan[] = [];
+  public replaySpans: ReplaySpan[] = [];
 
   private performanceObserver: PerformanceObserver | null = null;
 
@@ -367,7 +370,7 @@ export class SentryReplay implements Integration {
    */
   createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
     entries.forEach(({ type, start, end, name, data }) => {
-      this.spans.push({
+      this.replaySpans.push({
         op: type,
         description: name,
         startTimestamp: start,
@@ -464,12 +467,12 @@ export class SentryReplay implements Integration {
   /**
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
-  async sendReplayRequest(
-    endpoint: string,
-    events: RRWebEvent[],
-    replaySpans: ReplaySpan[],
-    breadcrumbs: Breadcrumb[]
-  ) {
+  async sendReplayRequest({
+    endpoint,
+    events,
+    replaySpans,
+    breadcrumbs,
+  }: ReplayRequest) {
     const stringifiedPayload = JSON.stringify({
       recording: events,
       replaySpans: replaySpans,
@@ -510,9 +513,9 @@ export class SentryReplay implements Integration {
     // events member so that we do not lose new events while uploading
     // attachment.
     const events = this.events;
-    const spans = this.spans;
+    const replaySpans = this.replaySpans;
     const breadcrumbs = this.breadcrumbs;
-    this.spans = [];
+    this.replaySpans = [];
     this.breadcrumbs = [];
     this.events = [];
 
@@ -523,7 +526,12 @@ export class SentryReplay implements Integration {
     );
 
     try {
-      await this.sendReplayRequest(endpoint, events, spans, breadcrumbs);
+      await this.sendReplayRequest({
+        endpoint,
+        events,
+        replaySpans,
+        breadcrumbs,
+      });
       return true;
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry

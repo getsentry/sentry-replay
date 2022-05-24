@@ -4,22 +4,15 @@ import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
 import * as Sentry from '@sentry/browser';
-// import { BrowserTracing } from '@sentry/tracing';
 
 import { SentryReplay } from '@sentry/replay';
 
 Sentry.init({
-  // debug: true,
   // org/project: sentry-emerging-tech/replays
-  dsn: 'http://c695ee8814214e3f90bcc13420c0ca3d@localhost:3001/3',
+  dsn: 'https://8616b02314c14ca1b499b098e1991eb5@o1176005.ingest.sentry.io/6273278',
   environment: 'demo',
   tracesSampleRate: 1.0,
-  integrations: [
-    new SentryReplay({ stickySession: true }),
-    // new BrowserTracing({
-    //   tracingOrigins: ['localhost:3000', 'localhost', /^\//],
-    // }),
-  ],
+  integrations: [new SentryReplay({ stickySession: true })],
 });
 
 ReactDOM.render(<App />, document.getElementById('root'));
@@ -27,5 +20,3 @@ ReactDOM.render(<App />, document.getElementById('root'));
 // unregister() to register() below. Note this comes with some pitfalls.
 // Learn more about service workers: https://bit.ly/CRA-PWA
 serviceWorker.unregister();
-
-setTimeout(() => console.log('test console breadcrumb!!'), 1000);
