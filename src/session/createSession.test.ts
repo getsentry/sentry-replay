@@ -1,6 +1,4 @@
 import * as Sentry from '@sentry/browser';
-import { getCurrentHub } from '@sentry/browser';
-import { isJsxSelfClosingElement } from 'typescript';
 
 import { createSession } from './createSession';
 import { saveSession } from './saveSession';
@@ -45,7 +43,9 @@ it('creates a new session with no sticky sessions', function () {
   expect(newSession.started).toBeGreaterThan(0);
   expect(newSession.lastActivity).toEqual(newSession.started);
 
-  Sentry.getCurrentHub().captureEvent.mockReset();
+  const captureEventMock = Sentry.getCurrentHub()
+    .captureEvent as captureEventMockType;
+  captureEventMock.mockReset();
 });
 
 it('creates a new session with sticky sessions', function () {

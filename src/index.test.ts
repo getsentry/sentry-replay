@@ -56,6 +56,7 @@ const mockRecord = rrweb.record as RecordMock;
 
 jest.useFakeTimers();
 
+// TODO: tests for our breadcrumbs / spans
 describe('SentryReplay', () => {
   let replay: SentryReplay;
   type MockSendReplayRequest = jest.MockedFunction<
@@ -209,7 +210,6 @@ describe('SentryReplay', () => {
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     mockRecord._emitter(TEST_EVENT);
-
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
     jest.advanceTimersByTime(ELAPSED);
