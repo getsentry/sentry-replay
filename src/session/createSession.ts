@@ -2,7 +2,8 @@ import { logger } from '@/util/logger';
 import { saveSession } from './saveSession';
 import type { ReplaySession } from './types';
 import { ROOT_REPLAY_NAME } from './constants';
-import { captureEvent } from '@sentry/browser';
+import { getCurrentHub } from '@sentry/browser';
+import { uuid4 } from '@sentry/utils';
 
 interface CreateSessionParams {
   /**
@@ -20,14 +21,19 @@ export function createSession({
   stickySession = false,
 }: CreateSessionParams): ReplaySession {
   const currentDate = new Date().getTime();
-  const id = captureEvent({
-    message: ROOT_REPLAY_NAME,
-  });
+  const hub = getCurrentHub();
+
   const session = {
-    id: id,
+    id: uuid4(),
     started: currentDate,
     lastActivity: currentDate,
   };
+  hub.captureEvent(
+    {
+      message: ROOT_REPLAY_NAME,
+    },
+    { event_id: session.id }
+  );
 
   logger.log(`Creating new session: ${session.id}`);
 

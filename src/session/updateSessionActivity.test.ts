@@ -3,7 +3,17 @@ import * as FetchSession from './fetchSession';
 import * as SaveSession from './saveSession';
 import { updateSessionActivity } from './updateSessionActivity';
 
-jest.mock('@sentry/browser');
+jest.mock('@sentry/browser', () => {
+  const mockCaptureEvent = jest.fn();
+  const mockGetCurrentHub = jest.fn(() => {
+    return {
+      captureEvent: mockCaptureEvent,
+    };
+  });
+  return {
+    getCurrentHub: mockGetCurrentHub,
+  };
+});
 
 beforeAll(() => {
   jest.spyOn(CreateSession, 'createSession');

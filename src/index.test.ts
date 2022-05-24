@@ -119,8 +119,6 @@ describe('SentryReplay', () => {
       started: BASE_TIMESTAMP,
     });
     expect(replay.session.id).toBeDefined();
-    expect(replay.session.spanId).toBeDefined();
-    expect(replay.session.traceId).toBeDefined();
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
@@ -196,7 +194,9 @@ describe('SentryReplay', () => {
     );
     expect(replay.sendReplayRequest).toHaveBeenCalledWith(
       expect.stringMatching(regex),
-      [TEST_EVENT]
+      [TEST_EVENT],
+      [],
+      []
     );
 
     // Session's last activity should be updated
@@ -221,7 +221,9 @@ describe('SentryReplay', () => {
     );
     expect(replay.sendReplayRequest).toHaveBeenCalledWith(
       expect.stringMatching(regex),
-      [TEST_EVENT]
+      [TEST_EVENT],
+      [],
+      []
     );
 
     // No activity has occurred, session's last activity should remain the same
@@ -267,8 +269,6 @@ describe('SentryReplay', () => {
     const initialSession = replay.session;
 
     expect(initialSession.id).toBeDefined();
-    expect(initialSession.spanId).toBeDefined();
-    expect(initialSession.traceId).toBeDefined();
 
     // Idle for 15 minutes
     jest.advanceTimersByTime(15 * 60000);

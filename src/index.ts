@@ -152,7 +152,7 @@ export class SentryReplay implements Integration {
       const newBreadcrumb = scope._breadcrumbs[scope._breadcrumbs.length - 1];
 
       if (
-        ['fetch', 'xhr'].includes(newBreadcrumb.category) ||
+        ['fetch', 'xhr', 'sentry.event'].includes(newBreadcrumb.category) ||
         newBreadcrumb.category.startsWith('ui.')
       ) {
         return;
