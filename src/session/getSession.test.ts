@@ -3,13 +3,17 @@ import * as FetchSession from './fetchSession';
 import { getSession } from './getSession';
 import { saveSession } from './saveSession';
 
-jest.mock('@sentry/browser');
+jest.mock('@sentry/utils', () => {
+  return {
+    ...(jest.requireActual('@sentry/utils') as { string: unknown }),
+    uuid4: jest.fn(() => 'test_session_id'),
+  };
+});
 
 function createMockSession(when: number = new Date().getTime()) {
   return {
-    id: 'transaction_id',
-    traceId: 'trace_id',
-    spanId: 'span_id',
+    id: 'test_session_id',
+    sequenceId: 0,
     lastActivity: when,
     started: when,
   };
@@ -34,9 +38,8 @@ it('creates a non-sticky session when one does not exist', function () {
   expect(CreateSession.createSession).toHaveBeenCalled();
 
   expect(session).toEqual({
-    id: 'transaction_id',
-    traceId: 'trace_id',
-    spanId: 'span_id',
+    id: 'test_session_id',
+    sequenceId: 0,
     lastActivity: expect.any(Number),
     started: expect.any(Number),
   });
@@ -65,44 +68,16 @@ it('creates a sticky session when one does not exist', function () {
   expect(CreateSession.createSession).toHaveBeenCalled();
 
   expect(session).toEqual({
-    id: 'transaction_id',
-    traceId: 'trace_id',
-    spanId: 'span_id',
+    id: 'test_session_id',
+    sequenceId: 0,
     lastActivity: expect.any(Number),
     started: expect.any(Number),
   });
 
   // Should not have anything in storage
   expect(FetchSession.fetchSession()).toEqual({
-    id: 'transaction_id',
-    traceId: 'trace_id',
-    spanId: 'span_id',
-    lastActivity: expect.any(Number),
-    started: expect.any(Number),
-  });
-});
-
-it('creates a sticky session when one does not exist', function () {
-  expect(FetchSession.fetchSession()).toBe(null);
-
-  const session = getSession({ expiry: 900000, stickySession: true });
-
-  expect(FetchSession.fetchSession).toHaveBeenCalled();
-  expect(CreateSession.createSession).toHaveBeenCalled();
-
-  expect(session).toEqual({
-    id: 'transaction_id',
-    traceId: 'trace_id',
-    spanId: 'span_id',
-    lastActivity: expect.any(Number),
-    started: expect.any(Number),
-  });
-
-  // Should not have anything in storage
-  expect(FetchSession.fetchSession()).toEqual({
-    id: 'transaction_id',
-    traceId: 'trace_id',
-    spanId: 'span_id',
+    id: 'test_session_id',
+    sequenceId: 0,
     lastActivity: expect.any(Number),
     started: expect.any(Number),
   });
@@ -118,9 +93,8 @@ it('fetches an existing sticky session', function () {
   expect(CreateSession.createSession).not.toHaveBeenCalled();
 
   expect(session).toEqual({
-    id: 'transaction_id',
-    traceId: 'trace_id',
-    spanId: 'span_id',
+    id: 'test_session_id',
+    sequenceId: 0,
     lastActivity: now,
     started: now,
   });
@@ -135,9 +109,8 @@ it('fetches an expired sticky session', function () {
   expect(FetchSession.fetchSession).toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
 
-  expect(session.id).toBe('transaction_id');
-  expect(session.traceId).toBe('trace_id');
-  expect(session.spanId).toBe('span_id');
+  expect(session.id).toBe('test_session_id');
   expect(session.lastActivity).toBeGreaterThanOrEqual(now);
   expect(session.started).toBeGreaterThanOrEqual(now);
+  expect(session.sequenceId).toBe(0);
 });

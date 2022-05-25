@@ -12,7 +12,7 @@ expect.extend({
     received: jest.Mocked<SentryReplay>,
     expected: ReplaySession
   ) {
-    const pass = this.equals(received.session, expected);
+    const pass = this.equals(received.session.id, expected.id);
 
     const options = {
       isNot: this.isNot,
@@ -48,8 +48,8 @@ expect.extend({
 
     const pass =
       !!lastCall &&
-      ATTACHMENTS_URL_REGEX.test(lastCall[0]) &&
-      this.equals(expected, lastCall[1]);
+      ATTACHMENTS_URL_REGEX.test(lastCall[0].endpoint) &&
+      this.equals(expected, lastCall[0].events);
 
     const options = {
       isNot: this.isNot,
@@ -73,7 +73,7 @@ expect.extend({
             `Expected: ${pass ? 'not ' : ''}${this.utils.printExpected(
               expected
             )}\n` +
-            `Received: ${this.utils.printReceived(lastCall[1])}`,
+            `Received: ${this.utils.printReceived(lastCall[0].events)}`,
     };
   },
 });
