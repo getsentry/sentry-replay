@@ -1,5 +1,4 @@
 import * as pako from 'pako';
-export {};
 
 onmessage = function (e) {
   console.log('Message received from main script');
