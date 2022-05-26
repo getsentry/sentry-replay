@@ -34,8 +34,8 @@ type RRWebPayload = string | Uint8Array;
 
 interface EventBuffer {
   addEvent: (event: RRWebEvent) => void;
-  addBreadcrumb: (breadcrumb: Breadcrumb) => void;
-  addReplaySpan: (replaySpan: ReplaySpan) => void;
+  // addBreadcrumb: (breadcrumb: Breadcrumb) => void;
+  // addReplaySpan: (replaySpan: ReplaySpan) => void;
   finish: () => Promise<RRWebPayload>;
 }
 
@@ -433,13 +433,13 @@ export class SentryReplay implements Integration {
       return;
     }
     // // TEMP: keep sending a replay event just for the duration
-    // captureEvent({
-    //   message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
-    //   tags: {
-    //     replayId: this.session.id,
-    //     sequenceId: this.session.sequenceId++,
-    //   },
-    // });
+    captureEvent({
+      message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
+      tags: {
+        replayId: this.session.id,
+        sequenceId: this.session.sequenceId++,
+      },
+    });
 
     this.addPerformanceEntries();
     const recordingData = await this.eventBuffer.finish();

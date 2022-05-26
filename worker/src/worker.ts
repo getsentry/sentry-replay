@@ -10,7 +10,7 @@ class Worker {
     postMessage('ok');
   }
 
-  add(data: string) {
+  addEvent(data: string) {
     this.deflate.push(data, constants.Z_SYNC_FLUSH);
     postMessage('ok');
   }
