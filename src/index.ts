@@ -63,6 +63,13 @@ interface SentryReplayConfiguration extends PluginOptions {
   rrwebConfig?: RRWebOptions;
 }
 
+interface ReplayRequest {
+  endpoint: string;
+  eventData: Uint8Array | string;
+  replaySpans: ReplaySpan[];
+  breadcrumbs: Breadcrumb[];
+}
+
 export class SentryReplay implements Integration {
   /**
    * @inheritDoc
@@ -202,6 +209,7 @@ export class SentryReplay implements Integration {
           return;
         }
 
+        // TODO: Handle checkouts well
         this.eventBuffer.addEvent(event);
 
         // This event type is a fullsnapshot, we should save immediately when this occurs
@@ -460,18 +468,23 @@ export class SentryReplay implements Integration {
   /**
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
-  async sendReplayRequest(endpoint: string, data: Uint8Array | string) {
+  async sendReplayRequest({
+    endpoint,
+    eventData,
+    breadcrumbs,
+    replaySpans,
+  }: ReplayRequest) {
+    // TODO: add spans and breadcrumbs back into req
     const formData = new FormData();
-    const payloadBlob = new Blob([data], {
+    const payloadBlob = new Blob([eventData], {
       type: 'application/json',
     });
     logger.log('blob size in bytes: ', payloadBlob.size);
 
     formData.append('rrweb', payloadBlob, `rrweb-${new Date().getTime()}.json`);
-    logger.log;
 
     // If sendBeacon is supported and payload is smol enough...
-    if (this.hasSendBeacon() && data.length <= 65536) {
+    if (this.hasSendBeacon() && eventData.length <= 65536) {
       logger.log(`uploading attachment via sendBeacon()`);
       window.navigator.sendBeacon(endpoint, formData);
       return;
@@ -488,7 +501,7 @@ export class SentryReplay implements Integration {
   /**
    * Finalize and send the current replay event to Sentry
    */
-  async sendReplay(eventId: string, data: Uint8Array | string) {
+  async sendReplay(eventId: string, eventData: Uint8Array | string) {
     // Make a copy of the events array reference and immediately clear the
     // events member so that we do not lose new events while uploading
     // attachment.
@@ -501,7 +514,12 @@ export class SentryReplay implements Integration {
       eventId
     );
     try {
-      await this.sendReplayRequest(endpoint, data);
+      await this.sendReplayRequest({
+        endpoint,
+        eventData,
+        breadcrumbs: this.breadcrumbs,
+        replaySpans: this.replaySpans,
+      });
       return true;
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry
