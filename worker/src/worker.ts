@@ -27,7 +27,7 @@ const compressor = new Worker();
 addEventListener('message', function (e) {
   const method = e.data.method as string;
   const args = e.data.args;
-  compressor[method as 'add' | 'finish'](...args);
+  compressor[method as 'addEvent' | 'finish'](...args);
 
   // console.log('Message received from main script');
   // console.log('Posting message back to main script');
