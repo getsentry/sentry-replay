@@ -100,6 +100,10 @@ export class SentryReplay implements Integration {
 
   private performanceObserver: PerformanceObserver | null = null;
 
+  private retryCount = 0;
+
+  private maxRetryCount = 5;
+
   session: ReplaySession | undefined;
 
   static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
@@ -540,7 +544,14 @@ export class SentryReplay implements Integration {
 
       // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
       this.events = [...events, ...this.events];
-      return false;
+      this.replaySpans = [...replaySpans, ...this.replaySpans];
+      this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
+
+      if (this.retryCount === this.maxRetryCount) {
+        return false;
+      } else {
+        this.sendReplay(eventId);
+      }
     }
   }
 }
