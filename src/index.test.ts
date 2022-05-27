@@ -311,11 +311,9 @@ describe('SentryReplay', () => {
     // fail the first request and pass the second one
     mockSendReplayRequest.mockRejectedValueOnce(Promise.reject());
     mockSendReplayRequest.mockReturnValueOnce(Promise.resolve());
-    await mockRecord._emitter(TEST_EVENT);
+    mockRecord._emitter(TEST_EVENT);
     // Pretend 6 seconds have passed
-    const ELAPSED = 6000;
-    jest.advanceTimersByTime(ELAPSED);
-
+    jest.advanceTimersToNextTimer();
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
     const regex = new RegExp(
@@ -336,7 +334,7 @@ describe('SentryReplay', () => {
       replayRequestPayload
     );
     expect(replay.sendReplayRequest).toHaveBeenNthCalledWith(
-      1,
+      2,
       replayRequestPayload
     );
 
