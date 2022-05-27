@@ -1,7 +1,6 @@
 import { logger } from '@sentry/utils';
 import workerString from './worker/worker.js';
 
-// TODO: better handling if there's no Worker api available
 export class WorkerInterface {
   worker: Worker;
   constructor() {

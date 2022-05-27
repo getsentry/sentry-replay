@@ -50,7 +50,6 @@ export class EventBufferArray {
   }
 }
 
-// TODO: better handling if there's no Worker api available
 export class EventBufferCompressionWorker {
   private worker: Worker;
   length = 0;
