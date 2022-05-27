@@ -8,8 +8,11 @@ export class WorkerInterface {
     if (window.Worker) {
       const workerBlob = new Blob([workerString]);
       const workerUrl = URL.createObjectURL(workerBlob);
-
-      this.worker = new Worker(workerUrl);
+      if (typeof Worker !== 'undefined') {
+        this.worker = new Worker(workerUrl);
+      } else {
+        throw new Error('Web worker is not available in browser');
+      }
       logger.log(this.worker);
       this.worker.onmessage = function (e) {
         logger.log(e.data);
