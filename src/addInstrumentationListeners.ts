@@ -58,8 +58,6 @@ function domCallback(handlerData: any) {
 }
 
 function xhrCallback(handlerData: any) {
-  // TODO: add status code into data, etc.
-
   if (handlerData.startTimestamp) {
     handlerData.xhr.__sentry_xhr__.startTimestamp = handlerData.startTimestamp;
   }
@@ -67,6 +65,7 @@ function xhrCallback(handlerData: any) {
     this.spans.push({
       description: handlerData.args[1],
       op: handlerData.args[0],
+      statusCode: handlerData.response.status,
       startTimestamp:
         handlerData.xhr.__sentry_xhr__.startTimestamp / 1000 ||
         handlerData.endTimestamp / 1000.0,
@@ -76,12 +75,11 @@ function xhrCallback(handlerData: any) {
 }
 
 function fetchCallback(handlerData: any) {
-  // TODO: add status code into data, etc.
-
   if (handlerData.endTimestamp) {
     this.spans.push({
       description: handlerData.args[1],
       op: handlerData.args[0],
+      statusCode: handlerData.response.status,
       startTimestamp: handlerData.startTimestamp / 1000,
       endTimestamp: handlerData.endTimestamp / 1000,
     });
