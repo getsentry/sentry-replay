@@ -22,7 +22,6 @@ import { ReplaySpan } from './types';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-import { saveSession } from './session/saveSession';
 import { captureEvent } from '@sentry/browser';
 import addInstrumentationListeners from './addInstrumentationListeners';
 
@@ -101,7 +100,7 @@ export class SentryReplay implements Integration {
   private performanceObserver: PerformanceObserver | null = null;
 
   private retryCount = 0;
-
+  private retryInterval = 5000;
   private maxRetryCount = 5;
 
   session: ReplaySession | undefined;
@@ -547,10 +546,15 @@ export class SentryReplay implements Integration {
       this.replaySpans = [...replaySpans, ...this.replaySpans];
       this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
 
-      if (this.retryCount === this.maxRetryCount) {
+      if (this.retryCount >= this.maxRetryCount) {
+        this.retryCount = 0;
+        this.retryCount = 5000;
         return false;
       } else {
-        this.sendReplay(eventId);
+        this.retryCount = this.retryCount + 1;
+        // will retry in intervals of 5, 10, 15, 20, 25 seconds
+        this.retryInterval = this.retryCount * this.retryInterval;
+        setTimeout(() => this.sendReplay(eventId), this.retryInterval);
       }
     }
   }
