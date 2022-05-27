@@ -506,6 +506,11 @@ export class SentryReplay implements Integration {
     });
   }
 
+  resetRetries() {
+    this.retryCount = 0;
+    this.retryInterval = 5000;
+  }
+
   /**
    * Finalize and send the current replay event to Sentry
    */
@@ -536,6 +541,7 @@ export class SentryReplay implements Integration {
         replaySpans,
         breadcrumbs,
       });
+      this.resetRetries();
       return true;
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry
@@ -547,8 +553,7 @@ export class SentryReplay implements Integration {
       this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
 
       if (this.retryCount >= this.maxRetryCount) {
-        this.retryCount = 0;
-        this.retryCount = 5000;
+        this.resetRetries();
       } else {
         this.retryCount = this.retryCount + 1;
         // will retry in intervals of 5, 10, 15, 20, 25 seconds
