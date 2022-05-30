@@ -30,17 +30,12 @@
     "url": "https://github.com/getsentry/sentry-replay/issues"
   },
   "homepage": "https://github.com/getsentry/sentry-replay#readme",
-  "peerDependencies": {
-    "@sentry/browser": ">=6.0.0"
-  },
   "devDependencies": {
     "@babel/core": "^7.17.5",
     "@rollup/plugin-node-resolve": "^13.3.0",
     "@rollup/plugin-replace": "^4.0.0",
     "@rollup/plugin-typescript": "^8.3.1",
-    "@sentry/browser": "^6.19.1",
-    "@sentry/types": "^6.19.1",
-    "@sentry/utils": "^6.19.1",
+    "@sentry/types": "7.0.0",
     "@types/jest": "^27.4.1",
     "@types/node": "^16.0.0",
     "@types/pako": "^1.0.4",
@@ -62,6 +57,9 @@
     "typescript": "^4.6.2"
   },
   "dependencies": {
+    "@sentry/browser": ">=6.18.2",
+    "@sentry/hub": "^7.0.0",
+    "@sentry/utils": "^7.0.0",
     "pako": "^2.0.4",
     "rrweb": "^1.1.3"
   },
