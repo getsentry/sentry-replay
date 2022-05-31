@@ -22,7 +22,6 @@ import { updateSessionActivity } from './session/updateSessionActivity';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-import { saveSession } from './session/saveSession';
 import { captureEvent } from '@sentry/browser';
 import addInstrumentationListeners from './addInstrumentationListeners';
 
@@ -65,6 +64,9 @@ interface ReplayRequest {
   events: Uint8Array | string;
 }
 
+const BASE_RETRY_INTERVAL = 5000;
+const MAX_RETRY_COUNT = 5;
+
 export class SentryReplay implements Integration {
   /**
    * @inheritDoc
@@ -99,6 +101,9 @@ export class SentryReplay implements Integration {
   private initialEventTimestampSinceFlush: number | null = null;
 
   private performanceObserver: PerformanceObserver | null = null;
+
+  private retryCount = 0;
+  private retryInterval = BASE_RETRY_INTERVAL;
 
   session: ReplaySession | undefined;
 
@@ -492,6 +497,11 @@ export class SentryReplay implements Integration {
     });
   }
 
+  resetRetries() {
+    this.retryCount = 0;
+    this.retryInterval = BASE_RETRY_INTERVAL;
+  }
+
   /**
    * Finalize and send the current replay event to Sentry
    */
@@ -512,13 +522,24 @@ export class SentryReplay implements Integration {
         endpoint,
         events,
       });
+      this.resetRetries();
       return true;
     } catch (ex) {
-      // we have to catch this otherwise it throws an infinite loop in Sentry
-      console.error(ex);
-      // TODO: handle failures here
-      // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
-      return false;
+      // // we have to catch this otherwise it throws an infinite loop in Sentry
+      // console.error(ex);
+      // // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
+      // this.events = [...events, ...this.events];
+      // this.replaySpans = [...replaySpans, ...this.replaySpans];
+      // this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
+      // if (this.retryCount >= MAX_RETRY_COUNT) {
+      //   this.resetRetries();
+      // } else {
+      //   this.retryCount = this.retryCount + 1;
+      //   // will retry in intervals of 5, 10, 15, 20, 25 seconds
+      //   this.retryInterval = this.retryCount * this.retryInterval;
+      //   setTimeout(() => this.sendReplay(eventId), this.retryInterval);
+      // }
+      // return false;
     }
   }
 }
