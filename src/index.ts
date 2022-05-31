@@ -3,7 +3,7 @@ import { uuid4 } from '@sentry/utils';
 import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
 import { record } from 'rrweb';
-import type { eventWithTime } from 'rrweb/typings/types';
+import { EventType, eventWithTime } from 'rrweb/typings/types';
 import {
   createPerformanceEntries,
   createMemoryEntry,
@@ -34,8 +34,6 @@ type RRWebPayload = string | Uint8Array;
 
 interface EventBuffer {
   addEvent: (event: RRWebEvent) => void;
-  // addBreadcrumb: (breadcrumb: Breadcrumb) => void;
-  // addReplaySpan: (replaySpan: ReplaySpan) => void;
   finish: () => Promise<RRWebPayload>;
 }
 
@@ -66,8 +64,6 @@ interface SentryReplayConfiguration extends PluginOptions {
 interface ReplayRequest {
   endpoint: string;
   eventData: Uint8Array | string;
-  replaySpans: ReplaySpan[];
-  breadcrumbs: Breadcrumb[];
 }
 
 export class SentryReplay implements Integration {
@@ -97,14 +93,11 @@ export class SentryReplay implements Integration {
    */
   private timeout: number;
 
-  private breadcrumbs: Breadcrumb[] = [];
-
   /**
    * The timestamp of the first event since the last flush.
    * This is used to determine if the maximum allowed time has passed before we should flush events again.
    */
   private initialEventTimestampSinceFlush: number | null = null;
-  public replaySpans: ReplaySpan[] = [];
 
   private performanceObserver: PerformanceObserver | null = null;
 
@@ -369,12 +362,19 @@ export class SentryReplay implements Integration {
    */
   createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
     entries.forEach(({ type, start, end, name, data }) => {
-      this.replaySpans.push({
-        op: type,
-        description: name,
-        startTimestamp: start,
-        endTimestamp: end,
-        data,
+      this.eventBuffer.addEvent({
+        type: EventType.Custom,
+        timestamp: start,
+        data: {
+          tag: 'performanceSpan',
+          payload: {
+            op: type,
+            description: name,
+            startTimestamp: start,
+            endTimestamp: end,
+            data,
+          },
+        },
       });
     });
   }
@@ -468,12 +468,7 @@ export class SentryReplay implements Integration {
   /**
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
-  async sendReplayRequest({
-    endpoint,
-    eventData,
-    breadcrumbs,
-    replaySpans,
-  }: ReplayRequest) {
+  async sendReplayRequest({ endpoint, eventData }: ReplayRequest) {
     // TODO: add spans and breadcrumbs back into req
     const formData = new FormData();
     const payloadBlob = new Blob([eventData], {
@@ -517,8 +512,6 @@ export class SentryReplay implements Integration {
       await this.sendReplayRequest({
         endpoint,
         eventData,
-        breadcrumbs: this.breadcrumbs,
-        replaySpans: this.replaySpans,
       });
       return true;
     } catch (ex) {
