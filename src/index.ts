@@ -59,6 +59,7 @@ interface ReplayRequest {
 }
 
 const BASE_RETRY_INTERVAL = 5000;
+const MAX_RETRY_COUNT = 5;
 
 export class SentryReplay implements Integration {
   /**
@@ -102,7 +103,7 @@ export class SentryReplay implements Integration {
   private performanceObserver: PerformanceObserver | null = null;
 
   private retryCount = 0;
-  private retryInterval = baseRetryInterval;
+  private retryInterval = BASE_RETRY_INTERVAL;
 
   session: ReplaySession | undefined;
 
@@ -509,7 +510,7 @@ export class SentryReplay implements Integration {
 
   resetRetries() {
     this.retryCount = 0;
-    this.retryInterval = baseRetryInterval;
+    this.retryInterval = BASE_RETRY_INTERVAL;
   }
 
   /**
@@ -552,7 +553,7 @@ export class SentryReplay implements Integration {
       this.replaySpans = [...replaySpans, ...this.replaySpans];
       this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
 
-      if (this.retryCount >= maxRetryCount) {
+      if (this.retryCount >= MAX_RETRY_COUNT) {
         this.resetRetries();
       } else {
         this.retryCount = this.retryCount + 1;
