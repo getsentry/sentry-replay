@@ -58,6 +58,9 @@ interface ReplayRequest {
   breadcrumbs: Breadcrumb[];
 }
 
+const baseRetryInterval = 5000;
+const maxRetryCount = 5;
+
 export class SentryReplay implements Integration {
   /**
    * @inheritDoc
@@ -100,8 +103,7 @@ export class SentryReplay implements Integration {
   private performanceObserver: PerformanceObserver | null = null;
 
   private retryCount = 0;
-  private retryInterval = 5000;
-  private maxRetryCount = 5;
+  private retryInterval = baseRetryInterval;
 
   session: ReplaySession | undefined;
 
@@ -508,7 +510,7 @@ export class SentryReplay implements Integration {
 
   resetRetries() {
     this.retryCount = 0;
-    this.retryInterval = 5000;
+    this.retryInterval = baseRetryInterval;
   }
 
   /**
@@ -546,13 +548,12 @@ export class SentryReplay implements Integration {
     } catch (ex) {
       // we have to catch this otherwise it throws an infinite loop in Sentry
       console.error(ex);
-
       // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
       this.events = [...events, ...this.events];
       this.replaySpans = [...replaySpans, ...this.replaySpans];
       this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
 
-      if (this.retryCount >= this.maxRetryCount) {
+      if (this.retryCount >= maxRetryCount) {
         this.resetRetries();
       } else {
         this.retryCount = this.retryCount + 1;

@@ -309,8 +309,12 @@ describe('SentryReplay', () => {
   it('fails to upload data on first call and retries after five seconds, sending successfully', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     // fail the first request and pass the second one
-    mockSendReplayRequest.mockRejectedValueOnce(Promise.reject());
-    mockSendReplayRequest.mockReturnValueOnce(Promise.resolve());
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      return Promise.resolve();
+    });
     mockRecord._emitter(TEST_EVENT);
     // Pretend 6 seconds have passed
     jest.advanceTimersToNextTimer();
@@ -329,13 +333,31 @@ describe('SentryReplay', () => {
       breadcrumbs: <Breadcrumbs[]>[],
     };
 
+    const replayRequestPayloadTwo = {
+      ...replayRequestPayload,
+      // since we log an error on retry, a console breadcrumb gets added to the subsequent sentReplayRequest call
+      breadcrumbs: [
+        {
+          category: 'console',
+          data: {
+            arguments: [Error('Something bad happened')],
+            logger: 'console',
+          },
+          level: 'error',
+          message: 'Error: Something bad happened',
+          timestamp: 1580623200,
+          type: 'default',
+        },
+      ],
+    };
+
     expect(replay.sendReplayRequest).toHaveBeenNthCalledWith(
       1,
       replayRequestPayload
     );
     expect(replay.sendReplayRequest).toHaveBeenNthCalledWith(
       2,
-      replayRequestPayload
+      replayRequestPayloadTwo
     );
 
     // No activity has occurred, session's last activity should remain the same
