@@ -316,7 +316,6 @@ describe('SentryReplay', () => {
       return Promise.resolve();
     });
     mockRecord._emitter(TEST_EVENT);
-    // Pretend 6 seconds have passed
     jest.advanceTimersToNextTimer();
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
@@ -345,7 +344,7 @@ describe('SentryReplay', () => {
           },
           level: 'error',
           message: 'Error: Something bad happened',
-          timestamp: 1580623200,
+          timestamp: expect.any(Number),
           type: 'default',
         },
       ],
