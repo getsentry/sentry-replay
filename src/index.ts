@@ -1,9 +1,9 @@
 import * as Sentry from '@sentry/browser';
 import { uuid4 } from '@sentry/utils';
-import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
+import { DsnComponents, Event, Integration } from '@sentry/types';
 
 import { record } from 'rrweb';
-import { EventType, eventWithTime } from 'rrweb/typings/types';
+import { eventWithTime } from 'rrweb/typings/types';
 import {
   createPerformanceEntries,
   createMemoryEntry,
@@ -19,7 +19,6 @@ import {
 } from './session/constants';
 import { getSession } from './session/getSession';
 import { updateSessionActivity } from './session/updateSessionActivity';
-import { ReplaySpan } from './types';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
@@ -63,7 +62,7 @@ interface SentryReplayConfiguration extends PluginOptions {
 
 interface ReplayRequest {
   endpoint: string;
-  eventData: Uint8Array | string;
+  events: Uint8Array | string;
 }
 
 export class SentryReplay implements Integration {
@@ -363,7 +362,7 @@ export class SentryReplay implements Integration {
   createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
     entries.forEach(({ type, start, end, name, data }) => {
       this.eventBuffer.addEvent({
-        type: EventType.Custom,
+        type: 5, // TODO add correct type
         timestamp: start,
         data: {
           tag: 'performanceSpan',
@@ -468,10 +467,10 @@ export class SentryReplay implements Integration {
   /**
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
-  async sendReplayRequest({ endpoint, eventData }: ReplayRequest) {
+  async sendReplayRequest({ endpoint, events }: ReplayRequest) {
     // TODO: add spans and breadcrumbs back into req
     const formData = new FormData();
-    const payloadBlob = new Blob([eventData], {
+    const payloadBlob = new Blob([events], {
       type: 'application/json',
     });
     logger.log('blob size in bytes: ', payloadBlob.size);
@@ -479,7 +478,7 @@ export class SentryReplay implements Integration {
     formData.append('rrweb', payloadBlob, `rrweb-${new Date().getTime()}.json`);
 
     // If sendBeacon is supported and payload is smol enough...
-    if (this.hasSendBeacon() && eventData.length <= 65536) {
+    if (this.hasSendBeacon() && events.length <= 65536) {
       logger.log(`uploading attachment via sendBeacon()`);
       window.navigator.sendBeacon(endpoint, formData);
       return;
@@ -496,7 +495,7 @@ export class SentryReplay implements Integration {
   /**
    * Finalize and send the current replay event to Sentry
    */
-  async sendReplay(eventId: string, eventData: Uint8Array | string) {
+  async sendReplay(eventId: string, events: Uint8Array | string) {
     // Make a copy of the events array reference and immediately clear the
     // events member so that we do not lose new events while uploading
     // attachment.
@@ -511,7 +510,7 @@ export class SentryReplay implements Integration {
     try {
       await this.sendReplayRequest({
         endpoint,
-        eventData,
+        events,
       });
       return true;
     } catch (ex) {

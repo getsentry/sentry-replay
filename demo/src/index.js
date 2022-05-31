@@ -8,18 +8,24 @@ import * as Sentry from '@sentry/browser';
 
 import { SentryReplay } from '@sentry/replay';
 
+// Sentry.init({
+//   // debug: true,
+//   // org/project: sentry-emerging-tech/replays
+//   dsn: 'http://c695ee8814214e3f90bcc13420c0ca3d@localhost:3001/3',
+//   environment: 'demo',
+//   tracesSampleRate: 1.0,
+//   integrations: [
+//     new SentryReplay({ stickySession: true }),
+//     // new BrowserTracing({
+//     //   tracingOrigins: ['localhost:3000', 'localhost', /^\//],
+//     // }),
+//   ],
+// });
+
 Sentry.init({
-  // debug: true,
-  // org/project: sentry-emerging-tech/replays
   dsn: 'http://c695ee8814214e3f90bcc13420c0ca3d@localhost:3001/3',
   environment: 'demo',
   tracesSampleRate: 1.0,
-  integrations: [
-    new SentryReplay({ stickySession: true }),
-    // new BrowserTracing({
-    //   tracingOrigins: ['localhost:3000', 'localhost', /^\//],
-    // }),
-  ],
 });
 
 ReactDOM.render(<App />, document.getElementById('root'));
