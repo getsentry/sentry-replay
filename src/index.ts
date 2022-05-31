@@ -58,8 +58,7 @@ interface ReplayRequest {
   breadcrumbs: Breadcrumb[];
 }
 
-const baseRetryInterval = 5000;
-const maxRetryCount = 5;
+const BASE_RETRY_INTERVAL = 5000;
 
 export class SentryReplay implements Integration {
   /**
