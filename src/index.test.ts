@@ -35,8 +35,6 @@ import {
 import { BASE_TIMESTAMP } from '@test';
 import { ReplaySpan, RRWebEvent } from '@/types';
 import { Breadcrumbs } from '@sentry/browser/types/integrations';
-import { EventStatus } from '@sentry/browser';
-import { eventStatusFromHttpCode } from '@sentry/utils';
 
 type RecordAdditionalProperties = {
   takeFullSnapshot: jest.Mock;
@@ -532,7 +530,7 @@ describe('SentryReplay (no sticky)', () => {
     jest.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
-    replay.events = [TEST_EVENT];
+    replay.eventBuffer.addEvent(TEST_EVENT);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -553,7 +551,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
-    expect(replay.events).toHaveLength(0);
+    expect(replay.eventBuffer.length).toBe(0);
   });
 
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', () => {
@@ -580,7 +578,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
-    expect(replay.events).toHaveLength(0);
+    expect(replay.eventBuffer.length).toBe(0);
   });
 
   it('uploads a replay event if 15 seconds have elapsed since the last replay upload', () => {
@@ -604,7 +602,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
     expect(replay.session.sequenceId).toBe(1);
     // events array should be empty
-    expect(replay.events).toHaveLength(0);
+    expect(replay.eventBuffer.length).toBe(0);
 
     // Let's make sure it continues to work
     mockSendReplayRequest.mockClear();
