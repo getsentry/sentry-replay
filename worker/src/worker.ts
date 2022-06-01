@@ -1,3 +1,4 @@
+import pako from 'pako';
 import { Deflate, constants } from 'pako';
 
 class Worker {
@@ -17,7 +18,7 @@ class Worker {
 
   finish() {
     this.deflate.push('', constants.Z_FINISH);
-    postMessage({ final: this.deflate.result });
+    postMessage({ final: pako.inflate(this.deflate.result) });
     this.deflate = new Deflate();
   }
 }

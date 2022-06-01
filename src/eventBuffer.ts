@@ -76,20 +76,6 @@ export class EventBufferCompressionWorker {
     });
     logger.log('Message posted to worker');
   }
-  // addReplaySpan(data: ReplaySpan) {
-  //   this.worker.postMessage({
-  //     method: 'addReplaySpan',
-  //     args: [JSON.stringify(data)],
-  //   });
-  //   logger.log('Message posted to worker');
-  // }
-  // addBreadcrumb(data: Breadcrumb) {
-  //   this.worker.postMessage({
-  //     method: 'addBreadcrumb',
-  //     args: [JSON.stringify(data)],
-  //   });
-  //   logger.log('Message posted to worker');
-  // }
 
   finish() {
     return new Promise<Uint8Array>((resolve, reject) => {

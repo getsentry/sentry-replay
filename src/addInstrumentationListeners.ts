@@ -24,7 +24,7 @@ function scopeListenerCallback(scope: Scope) {
     return;
   }
 
-  this.eventBuffer.addEvent.push({ type: 'default', ...newBreadcrumb });
+  this.eventBuffer.addEvent({ type: 'default', ...newBreadcrumb });
   this.eventBuffer.addEvent({
     type: 5, // TODO add correct type
     timestamp: newBreadcrumb.timestamp,

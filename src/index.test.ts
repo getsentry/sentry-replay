@@ -60,7 +60,8 @@ const mockRecord = rrweb.record as RecordMock;
 
 // TODO: see if we can remove legacy once upgraded to jest 28
 // and we can pass config to usefaketimers
-jest.useFakeTimers('legacy');
+// @ts-expect-error test
+jest.useFakeTimers({ advanceTimers: true });
 class mockTransport {
   async sendEvent(e: Event) {
     return {
@@ -102,7 +103,7 @@ describe('SentryReplay', () => {
       integrations: [replay],
       autoSessionTracking: false,
       sendClientReports: false,
-      debug: true,
+      // debug: true,
       // @ts-expect-error testing
       transport: mockTransport,
     });
@@ -117,12 +118,12 @@ describe('SentryReplay', () => {
   });
 
   beforeEach(() => {
-    // jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    jest.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
   });
 
   afterEach(() => {
-    // jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    jest.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
     mockRecord.takeFullSnapshot.mockClear();
@@ -132,7 +133,9 @@ describe('SentryReplay', () => {
     replay && replay.teardown();
   });
 
-  fit('calls rrweb.record with custom options', () => {
+  it('calls rrweb.record with custom options', async () => {
+    jest.advanceTimersByTime(1);
+
     expect(mockRecord.mock.calls[0][0]).toMatchInlineSnapshot(`
       Object {
         "blockClass": "sr-block",
@@ -145,6 +148,7 @@ describe('SentryReplay', () => {
   });
 
   it('should have a session after setup', () => {
+    jest.advanceTimersByTime(1);
     expect(replay.session).toMatchObject({
       lastActivity: BASE_TIMESTAMP,
       started: BASE_TIMESTAMP,
@@ -202,7 +206,6 @@ describe('SentryReplay', () => {
   });
 
   it('uploads a replay event when document becomes hidden', async () => {
-    jest.useFakeTimers('legacy');
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
@@ -213,6 +216,7 @@ describe('SentryReplay', () => {
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
     jest.advanceTimersByTime(ELAPSED);
+
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     replay.eventBuffer.addEvent(TEST_EVENT);
     document.dispatchEvent(new Event('visibilitychange'));
