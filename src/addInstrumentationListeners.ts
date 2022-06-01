@@ -3,7 +3,6 @@ import { record } from 'rrweb';
 import { SentryReplay } from '@';
 import { Scope } from '@sentry/hub';
 import { addInstrumentationHandler, htmlTreeAsString } from '@sentry/utils';
-// import { EventType } from 'rrweb/typings/types';
 
 export default function addInstrumentationListeners(
   scope: Scope,
@@ -28,7 +27,7 @@ function scopeListenerCallback(scope: Scope) {
 
   this.eventBuffer.addEvent({ type: 'default', ...newBreadcrumb });
   this.eventBuffer.addEvent({
-    type: 5, // TODO add correct type
+    type: 5, // TODO add correct type here
     timestamp: newBreadcrumb.timestamp,
     data: {
       tag: 'breadcrumb',

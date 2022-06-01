@@ -57,9 +57,7 @@ jest.unmock('@sentry/browser');
 
 const mockRecord = rrweb.record as RecordMock;
 
-// TODO: see if we can remove legacy once upgraded to jest 28
-// and we can pass config to usefaketimers
-// @ts-expect-error test
+// @ts-expect-error ts-jest hasn't updated types for this function
 jest.useFakeTimers({ advanceTimers: true });
 class mockTransport {
   async sendEvent(e: Event) {
@@ -70,13 +68,13 @@ class mockTransport {
     };
   }
   async sendSession() {
-    console.log('her2');
+    return;
   }
   async recordLostEvent() {
-    console.log('here3');
+    return;
   }
   async close() {
-    console.log('here4');
+    return;
   }
 }
 
@@ -114,7 +112,7 @@ describe('SentryReplay', () => {
         return;
       })
     );
-    // jest.runAllTimers();
+    jest.runAllTimers();
   });
 
   beforeEach(() => {
@@ -265,7 +263,7 @@ describe('SentryReplay', () => {
     expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
-    // expect(replay.events).toHaveLength(0);
+    expect(replay.eventBuffer.length).toBe(0);
   });
 
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', () => {
@@ -292,7 +290,7 @@ describe('SentryReplay', () => {
     expect(replay.session.sequenceId).toBe(1);
 
     // events array should be empty
-    expect(replay.eventBuffer).toBe(0);
+    expect(replay.eventBuffer.length).toBe(0);
   });
 
   it('uploads a replay event if 15 seconds have elapsed since the last replay upload', () => {
@@ -316,7 +314,7 @@ describe('SentryReplay', () => {
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
     expect(replay.session.sequenceId).toBe(1);
     // events array should be empty
-    expect(replay.eventBuffer).toBe(0);
+    expect(replay.eventBuffer.length).toBe(0);
 
     // Let's make sure it continues to work
     mockSendReplayRequest.mockClear();

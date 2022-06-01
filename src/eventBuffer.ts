@@ -25,8 +25,10 @@ export class EventBufferArray {
 
   constructor() {
     this.events = [];
-    this.replaySpans = [];
-    this.breadcrumbs = [];
+  }
+
+  length() {
+    return this.events.length;
   }
 
   addEvent(event: RRWebEvent) {
@@ -43,8 +45,6 @@ export class EventBufferArray {
     return new Promise<string>((resolve, reject) => {
       const eventsRet = this.events;
       this.events = [];
-      this.replaySpans = [];
-      this.breadcrumbs = [];
       resolve(JSON.stringify(eventsRet));
     });
   }
@@ -52,7 +52,7 @@ export class EventBufferArray {
 
 export class EventBufferCompressionWorker {
   private worker: Worker;
-  length = 0;
+  private eventBufferItemLength = 0;
   constructor() {
     const workerBlob = new Blob([workerString]);
     const workerUrl = URL.createObjectURL(workerBlob);
@@ -68,8 +68,12 @@ export class EventBufferCompressionWorker {
     this.worker.postMessage({ method: 'init', args: [] });
     logger.log('Message posted to worker');
   }
+  length() {
+    return this.eventBufferItemLength;
+  }
 
   addEvent(data: RRWebEvent) {
+    // TODO: if length is 0, add empty left bracket here
     this.worker.postMessage({
       method: 'addEvent',
       args: [JSON.stringify(data)],
@@ -78,6 +82,8 @@ export class EventBufferCompressionWorker {
   }
 
   finish() {
+    // TODO: terminate with empty event with no trailing comma,
+    // right side bracket
     return new Promise<Uint8Array>((resolve, reject) => {
       this.worker.postMessage({ method: 'finish', args: [] });
       logger.log('Message posted to worker');

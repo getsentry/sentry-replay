@@ -32,6 +32,7 @@ type RRWebPayload = string | Uint8Array;
 
 interface EventBuffer {
   addEvent: (event: RRWebEvent) => void;
+  length: () => number;
   finish: () => Promise<RRWebPayload>;
 }
 
@@ -545,6 +546,7 @@ export class SentryReplay implements Integration {
       this.resetRetries();
       return true;
     } catch (ex) {
+      // TODO: re-implement catch logic with eventBuffer
       // // we have to catch this otherwise it throws an infinite loop in Sentry
       // console.error(ex);
       // // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
