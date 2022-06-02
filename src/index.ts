@@ -34,11 +34,6 @@ import { getDom } from './coreHandlers/getDom';
 import { getFetch } from './coreHandlers/getFetch';
 import { getXhr } from './coreHandlers/getXhr';
 
-/**
- * Returns true if we want to flush immediately, otherwise continue with normal batching
- */
-type AddReplayEventCallback = () => boolean;
-
 interface PluginOptions {
   /**
    * The amount of time to wait before sending a replay
