@@ -1,9 +1,10 @@
 import * as Sentry from '@sentry/browser';
-import { uuid4 } from '@sentry/utils';
+import { captureEvent } from '@sentry/browser';
+import { addInstrumentationHandler, uuid4 } from '@sentry/utils';
 import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
 import { record } from 'rrweb';
-import type { eventWithTime } from 'rrweb/typings/types';
+
 import {
   createPerformanceEntries,
   createMemoryEntry,
@@ -18,19 +19,19 @@ import {
 } from './session/constants';
 import { getSession } from './session/getSession';
 import { updateSessionActivity } from './session/updateSessionActivity';
-import { ReplaySpan } from './types';
+import {
+  RRWebEvent,
+  RRWebOptions,
+  ReplaySpan,
+  ReplayRequest,
+  InstrumentationType,
+} from './types';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-import { captureEvent } from '@sentry/browser';
-import addInstrumentationListeners from './addInstrumentationListeners';
+import { handleDom, handleScope, handleFetch, handleXhr } from './coreHandlers';
 
-type RRWebEvent = eventWithTime;
-type RRWebOptions = Parameters<typeof record>[0];
 
-/**
- * Returns true if we want to flush immediately, otherwise continue with normal batching
- */
 type AddReplayEventCallback = () => boolean;
 
 interface PluginOptions {
@@ -55,13 +56,6 @@ interface SentryReplayConfiguration extends PluginOptions {
    * Options for `rrweb.recordsetup
    */
   rrwebConfig?: RRWebOptions;
-}
-
-interface ReplayRequest {
-  endpoint: string;
-  events: RRWebEvent[];
-  replaySpans: ReplaySpan[];
-  breadcrumbs: Breadcrumb[];
 }
 
 const BASE_RETRY_INTERVAL = 5000;
@@ -159,17 +153,14 @@ export class SentryReplay implements Integration {
   }
 
   setup() {
-    const hub = Sentry.getCurrentHub();
-    const scope = hub.getScope();
-
-    addInstrumentationListeners(scope, this);
-
     this.loadSession({ expiry: SESSION_IDLE_DURATION });
 
     // If there is no session, then something bad has happened - can't continue
     if (!this.session) {
       throw new Error('Invalid session');
     }
+
+    this.addListeners();
 
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
@@ -208,8 +199,6 @@ export class SentryReplay implements Integration {
         });
       },
     });
-
-    this.addListeners();
   }
 
   /**
@@ -301,6 +290,12 @@ export class SentryReplay implements Integration {
   addListeners() {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
 
+    // Listeners from core SDK //
+    const scope = Sentry.getCurrentHub().getScope();
+    scope.addScopeListener(this.handleCoreListener('scope'));
+    addInstrumentationHandler('dom', this.handleCoreListener('dom'));
+
+    // PerformanceObserver //
     if (!('PerformanceObserver' in window)) {
       return;
     }
@@ -339,16 +334,6 @@ export class SentryReplay implements Integration {
       this.performanceObserver = null;
     }
   }
-
-  /**
-   * Keep a list of performance entries that will be sent with a replay
-   */
-  handlePerformanceObserver = (
-    list: PerformanceObserverEntryList
-    // observer: PerformanceObserver
-  ) => {
-    this.performanceEvents = [...this.performanceEvents, ...list.getEntries()];
-  };
 
   /**
    * Handle when visibility of the page changes. (e.g. new tab is opened)
@@ -391,6 +376,49 @@ export class SentryReplay implements Integration {
     if (document.visibilityState !== 'visible') {
       this.finishReplayEvent();
     }
+  };
+
+  handleCoreListener = (type: InstrumentationType) => (handlerData: any) => {
+    const handlerMap: Record<
+      InstrumentationType,
+      [
+        handler: InstrumentationType extends 'fetch' | 'xhr'
+          ? (handlerData: any) => ReplaySpan
+          : (handlerData: any) => Breadcrumb,
+        store: InstrumentationType extends 'fetch' | 'xhr'
+          ? ReplaySpan[]
+          : Breadcrumb[]
+      ]
+    > = {
+      scope: [handleScope, this.breadcrumbs],
+      dom: [handleDom, this.breadcrumbs],
+      fetch: [handleFetch, this.replaySpans],
+      xhr: [handleXhr, this.replaySpans],
+    };
+
+    if (!(type in handlerMap)) {
+      throw new Error(`No handler defined for type: ${type}`);
+    }
+
+    const [handlerFn, handlerStore] = handlerMap[type];
+
+    const result = handlerFn(handlerData);
+
+    if (result === null) {
+      return;
+    }
+
+    handlerStore.push(result);
+  };
+
+  /**
+   * Keep a list of performance entries that will be sent with a replay
+   */
+  handlePerformanceObserver = (
+    list: PerformanceObserverEntryList
+    // observer: PerformanceObserver
+  ) => {
+    this.performanceEvents = [...this.performanceEvents, ...list.getEntries()];
   };
 
   /**
