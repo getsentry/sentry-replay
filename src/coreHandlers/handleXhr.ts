@@ -12,10 +12,12 @@ export function handleXhr(handlerData: any): ReplaySpan {
   return {
     description: handlerData.args[1],
     op: handlerData.args[0],
-    statusCode: handlerData.response.status,
     startTimestamp:
       handlerData.xhr.__sentry_xhr__.startTimestamp / 1000 ||
       handlerData.endTimestamp / 1000.0,
     endTimestamp: handlerData.endTimestamp / 1000.0,
+    data: {
+      statusCode: handlerData.response.status,
+    },
   };
 }

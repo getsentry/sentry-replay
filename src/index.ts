@@ -35,13 +35,13 @@ import { handleDom, handleScope, handleFetch, handleXhr } from './coreHandlers';
 /**
  * Returns true if we want to flush immediately, otherwise continue with normal batching
  */
-type AddUpdateCallback = () => boolean;
+type AddUpdateCallback = () => boolean | void;
 
 type RRWebPayload = string | Uint8Array;
 
 interface EventBuffer {
   addEvent: (event: RRWebEvent) => void;
-  length: () => number;
+  length: number;
   finish: () => Promise<RRWebPayload>;
 }
 
@@ -67,11 +67,6 @@ interface SentryReplayConfiguration extends PluginOptions {
    * Options for `rrweb.recordsetup
    */
   rrwebConfig?: RRWebOptions;
-}
-
-interface ReplayRequest {
-  endpoint: string;
-  events: Uint8Array | string;
 }
 
 const BASE_RETRY_INTERVAL = 5000;
@@ -405,22 +400,20 @@ export class SentryReplay implements Integration {
         handler: InstrumentationType extends 'fetch' | 'xhr'
           ? (handlerData: any) => ReplaySpan
           : (handlerData: any) => Breadcrumb,
-        store: InstrumentationType extends 'fetch' | 'xhr'
-          ? ReplaySpan[]
-          : Breadcrumb[]
+        eventType: string
       ]
     > = {
-      scope: [handleScope, this.breadcrumbs],
-      dom: [handleDom, this.breadcrumbs],
-      fetch: [handleFetch, this.replaySpans],
-      xhr: [handleXhr, this.replaySpans],
+      scope: [handleScope, 'breadcrumb'],
+      dom: [handleDom, 'breadcrumb'],
+      fetch: [handleFetch, 'span'],
+      xhr: [handleXhr, 'span'],
     };
 
     if (!(type in handlerMap)) {
       throw new Error(`No handler defined for type: ${type}`);
     }
 
-    const [handlerFn, handlerStore] = handlerMap[type];
+    const [handlerFn, eventType] = handlerMap[type];
 
     const result = handlerFn(handlerData);
 
@@ -428,20 +421,18 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    handlerStore.push(result);
-
-    // this.eventBuffer.addEvent({
-    // type: 5, // TODO add correct type here
-    // timestamp: newBreadcrumb.timestamp,
-    // data: {
-    // tag: 'breadcrumb',
-    // payload: {
-    // ...newBreadcrumb,
-    // },
-    // },
-    // });
-
-    this.addUpdate();
+    this.addUpdate(() => {
+      this.eventBuffer.addEvent({
+        type: 5, // TODO add correct type here
+        timestamp:
+          (result as Breadcrumb).timestamp ||
+          (result as ReplaySpan).startTimestamp,
+        data: {
+          tag: eventType,
+          payload: result,
+        },
+      });
+    });
   };
 
   /**
@@ -580,12 +571,13 @@ export class SentryReplay implements Integration {
     const payloadBlob = new Blob([events], {
       type: 'application/json',
     });
+
     logger.log('blob size in bytes: ', payloadBlob.size);
 
     formData.append('rrweb', payloadBlob, `rrweb-${new Date().getTime()}.json`);
 
     // If sendBeacon is supported and payload is smol enough...
-    if (this.hasSendBeacon() && events.length <= 65536) {
+    if (this.hasSendBeacon() && payloadBlob.size <= 65535) {
       logger.log(`uploading attachment via sendBeacon()`);
       window.navigator.sendBeacon(endpoint, formData);
       return;
@@ -609,13 +601,9 @@ export class SentryReplay implements Integration {
    */
   async sendReplay(eventId: string, events: Uint8Array | string) {
     // short circuit if theres no events to upload
-    // if (
-    // !this.events.length &&
-    // !this.replaySpans.length &&
-    // !this.breadcrumbs.length
-    // ) {
-    // return;
-    // }
+    if (!events.length) {
+      return;
+    }
 
     // Make a copy of the events array reference and immediately clear the
     // events member so that we do not lose new events while uploading

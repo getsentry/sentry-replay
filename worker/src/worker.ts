@@ -1,36 +1,29 @@
-import pako from 'pako';
-import { Deflate, constants } from 'pako';
+import { Compressor } from './Compressor';
 
-class Worker {
-  deflate: Deflate;
-  constructor() {
-    this.deflate = new Deflate();
-  }
+const compressor = new Compressor();
 
-  init() {
+const handlers: Record<string, (args: any[]) => void> = {
+  addEvent: (data: Record<string, any>) => {
+    compressor.addEvent(data);
     postMessage('ok');
-  }
+  },
 
-  addEvent(data: string) {
-    this.deflate.push(data, constants.Z_SYNC_FLUSH);
-    postMessage('ok');
-  }
+  finish: () => {
+    try {
+      const result = compressor.finish();
 
-  finish() {
-    this.deflate.push('', constants.Z_FINISH);
-    postMessage({ final: pako.inflate(this.deflate.result) });
-    this.deflate = new Deflate();
-  }
-}
-
-const compressor = new Worker();
+      postMessage({ final: result });
+    } catch (err) {
+      console.error(err);
+    }
+  },
+};
 
 addEventListener('message', function (e) {
   const method = e.data.method as string;
-  const args = e.data.args;
-  compressor[method as 'addEvent' | 'finish'](...args);
+  const [data] = e.data.args || [];
 
-  // console.log('Message received from main script');
-  // console.log('Posting message back to main script');
-  // postMessage('test');
+  if (method in handlers && typeof handlers[method] === 'function') {
+    handlers[method](data);
+  }
 });

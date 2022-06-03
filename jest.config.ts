@@ -12,7 +12,7 @@ export default async (): Promise<Config.InitialOptions> => {
     }),
     setupFilesAfterEnv: ['./jest.setup.ts'],
     testEnvironment: 'jsdom',
-    testMatch: ['<rootDir>/src/**/*(*.)@(spec|test).ts'],
+    testMatch: ['<rootDir>/(src|worker)/**/*(*.)@(spec|test).ts'],
     // transform: { '^.+\\.(js|jsx)$': 'babel-jest' },
   };
 };
