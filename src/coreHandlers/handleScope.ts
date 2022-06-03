@@ -1,6 +1,6 @@
 import { Scope } from '@sentry/hub';
 
-export function getScope(scope: Scope) {
+export function handleScope(scope: Scope) {
   //@ts-expect-error using private val
   const newBreadcrumb = scope._breadcrumbs[scope._breadcrumbs.length - 1];
 

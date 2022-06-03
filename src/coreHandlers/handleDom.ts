@@ -2,7 +2,7 @@ import { record } from 'rrweb';
 
 import { htmlTreeAsString } from '@sentry/utils';
 
-export function getDom(handlerData: any) {
+export function handleDom(handlerData: any) {
   // Taken from https://github.com/getsentry/sentry-javascript/blob/master/packages/browser/src/integrations/breadcrumbs.ts#L112
   let target;
   let targetNode;

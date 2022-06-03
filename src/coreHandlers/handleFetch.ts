@@ -1,6 +1,6 @@
 import { ReplaySpan } from '@/types';
 
-export function getFetch(handlerData: any): ReplaySpan {
+export function handleFetch(handlerData: any): ReplaySpan {
   // TODO: add status code into data, etc.
 
   if (!handlerData.endTimestamp) {

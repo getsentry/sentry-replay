@@ -1,6 +1,6 @@
 import { ReplaySpan } from '@/types';
 
-export function getXhr(handlerData: any): ReplaySpan {
+export function handleXhr(handlerData: any): ReplaySpan {
   // TODO: add status code into data, etc.
 
   if (handlerData.startTimestamp) {

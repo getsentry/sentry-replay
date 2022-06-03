@@ -29,10 +29,7 @@ import {
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-import { getScope } from './coreHandlers/getScope';
-import { getDom } from './coreHandlers/getDom';
-import { getFetch } from './coreHandlers/getFetch';
-import { getXhr } from './coreHandlers/getXhr';
+import { handleDom, handleScope, handleFetch, handleXhr } from './coreHandlers';
 
 interface PluginOptions {
   /**
@@ -378,10 +375,10 @@ export class SentryReplay implements Integration {
           : Breadcrumb[]
       ]
     > = {
-      scope: [getScope, this.breadcrumbs],
-      dom: [getDom, this.breadcrumbs],
-      fetch: [getFetch, this.replaySpans],
-      xhr: [getXhr, this.replaySpans],
+      scope: [handleScope, this.breadcrumbs],
+      dom: [handleDom, this.breadcrumbs],
+      fetch: [handleFetch, this.replaySpans],
+      xhr: [handleXhr, this.replaySpans],
     };
 
     if (!(type in handlerMap)) {
