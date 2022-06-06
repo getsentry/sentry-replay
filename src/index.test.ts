@@ -434,7 +434,7 @@ describe('SentryReplay', () => {
   });
 });
 
-describe.skip('SentryReplay (no sticky)', () => {
+describe('SentryReplay (no sticky)', () => {
   let replay: SentryReplay;
   type MockSendReplayRequest = jest.MockedFunction<
     typeof replay.sendReplayRequest
@@ -449,6 +449,23 @@ describe.skip('SentryReplay (no sticky)', () => {
       stickySession: false,
       rrwebConfig: { ignoreClass: 'sr-test' },
     });
+
+    const hub = new Sentry.Hub();
+    global.fetch = jest.fn();
+    const client = new Sentry.BrowserClient({
+      dsn: 'https://dsn@ingest.f00.f00/1',
+      transport: Sentry.makeFetchTransport,
+      stackParser: Sentry.defaultStackParser,
+      // tracesSampleRate: 1.0,
+      integrations: [replay],
+    });
+    hub.bindClient(client);
+
+    jest.spyOn(Sentry, 'getCurrentHub');
+
+    (
+      Sentry.getCurrentHub as jest.MockedFunction<typeof Sentry.getCurrentHub>
+    ).mockImplementation(() => hub);
 
     // XXX: we cannot call `Sentry.init()` again in the same test file
     // So we have to fake the init with existing SDK client with a different plugin instance
@@ -528,7 +545,7 @@ describe.skip('SentryReplay (no sticky)', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
-  it('uploads a replay event when document becomes hidden', () => {
+  it('uploads a replay event when document becomes hidden', async () => {
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
@@ -546,17 +563,11 @@ describe.skip('SentryReplay (no sticky)', () => {
 
     document.dispatchEvent(new Event('visibilitychange'));
 
+    await new Promise(process.nextTick);
+
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
-    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
-      endpoint: expect.stringMatching(regex),
-      events: [TEST_EVENT],
-      replaySpans: [],
-      breadcrumbs: [],
-    });
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
@@ -566,24 +577,16 @@ describe.skip('SentryReplay (no sticky)', () => {
     expect(replay.eventBuffer.length).toBe(0);
   });
 
-  it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', () => {
-    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+  it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', async () => {
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     mockRecord._emitter(TEST_EVENT);
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    await advanceTimers(ELAPSED);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
-    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
-      endpoint: expect.stringMatching(regex),
-      events: [TEST_EVENT],
-      replaySpans: [],
-      breadcrumbs: [],
-    });
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
@@ -593,7 +596,7 @@ describe.skip('SentryReplay (no sticky)', () => {
     expect(replay.eventBuffer.length).toBe(0);
   });
 
-  it('uploads a replay event if 15 seconds have elapsed since the last replay upload', () => {
+  it('uploads a replay event if 15 seconds have elapsed since the last replay upload', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
@@ -604,13 +607,15 @@ describe.skip('SentryReplay (no sticky)', () => {
     // We are at time = +16seconds now (relative to BASE_TIMESTAMP)
     // The next event should cause an upload immediately
     mockRecord._emitter(TEST_EVENT);
+    await new Promise(process.nextTick);
+
     expect(replay).toHaveSentReplay(
       JSON.stringify([...Array(5)].map(() => TEST_EVENT))
     );
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
     mockSendReplayRequest.mockClear();
-    jest.advanceTimersByTime(5000);
+    await advanceTimers(5000);
     expect(replay).not.toHaveSentReplay();
 
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
@@ -621,14 +626,14 @@ describe.skip('SentryReplay (no sticky)', () => {
     // Let's make sure it continues to work
     mockSendReplayRequest.mockClear();
     mockRecord._emitter(TEST_EVENT);
-    jest.advanceTimersByTime(5000);
+    await advanceTimers(5000);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // Clean-up
     mockSendReplayRequest.mockReset();
   });
 
-  it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', () => {
+  it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
     const initialSession = replay.session;
 
     expect(initialSession.id).toBeDefined();
@@ -644,6 +649,9 @@ describe.skip('SentryReplay (no sticky)', () => {
       type: 3,
     };
     mockRecord._emitter(TEST_EVENT);
+
+    await new Promise(process.nextTick);
+
     expect(replay).not.toHaveSentReplay();
 
     // Instead of recording the above event, a full snapshot will occur.
