@@ -1,7 +1,7 @@
-import { ReplaySpan, RRWebEvent } from './types';
+import { RRWebEvent } from './types';
 import { logger } from './util/logger';
 import workerString from './worker/worker.js';
-import { Breadcrumb } from '@sentry/types';
+
 declare global {
   interface Window {
     __SENTRY_USE_ARRAY_BUFFER: boolean;
@@ -17,7 +17,13 @@ export function createEventBuffer() {
   return new EventBufferArray();
 }
 
-export class EventBufferArray {
+interface IEventBuffer {
+  get length(): number;
+  addEvent(event: RRWebEvent): void;
+  finish(): Promise<string | Uint8Array>;
+}
+
+class EventBufferArray implements IEventBuffer {
   events: RRWebEvent[];
 
   constructor() {
@@ -41,7 +47,7 @@ export class EventBufferArray {
   }
 }
 
-export class EventBufferCompressionWorker {
+class EventBufferCompressionWorker implements IEventBuffer {
   private worker: Worker;
   private eventBufferItemLength = 0;
   constructor() {
@@ -75,6 +81,7 @@ export class EventBufferCompressionWorker {
 
   finish() {
     return new Promise<Uint8Array>((resolve, reject) => {
+      const self = this;
       this.worker.postMessage({ method: 'finish', args: [] });
       logger.log('Message posted to worker');
       this.worker.onmessage = function finishListener(e) {
@@ -83,6 +90,7 @@ export class EventBufferCompressionWorker {
           logger.log('sending compressed');
           const final = e.data.final as Uint8Array;
           resolve(final);
+          self.eventBufferItemLength = 0; // self = instance of EventBufferCompressionWorker
           this.removeEventListener('onmessage', finishListener);
         }
       };

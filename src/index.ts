@@ -271,7 +271,7 @@ export class SentryReplay implements Integration {
     // elapses.
     this.timeout = window.setTimeout(() => {
       logger.log('replay timeout exceeded, finishing replay event');
-      this.flushUpdate();
+      this.flushUpdate(now);
     }, this.options.uploadMinDelay);
   }
 
@@ -526,7 +526,7 @@ export class SentryReplay implements Integration {
     return false;
   }
 
-  async flushUpdate() {
+  async flushUpdate(lastActivity?: number) {
     if (!this.checkAndHandleExpiredSession()) {
       logger.error(
         new Error('Attempting to finish replay event after session expired.')
@@ -552,7 +552,7 @@ export class SentryReplay implements Integration {
 
     this.initialEventTimestampSinceFlush = null;
     // TBD: Alternatively we could update this after every rrweb event
-    this.session.lastActivity = new Date().getTime();
+    this.session.lastActivity = lastActivity || new Date().getTime();
   }
 
   /**
