@@ -424,9 +424,11 @@ export class SentryReplay implements Integration {
     this.addUpdate(() => {
       this.eventBuffer.addEvent({
         type: 5, // TODO add correct type here
+        // TODO: We were converting from ms to seconds for breadcrumbs, spans,
+        // but maybe we should just keep them as milliseconds
         timestamp:
-          (result as Breadcrumb).timestamp ||
-          (result as ReplaySpan).startTimestamp,
+          (result as Breadcrumb).timestamp * 1000 ||
+          (result as ReplaySpan).startTimestamp * 1000,
         data: {
           tag: eventType,
           payload: result,
