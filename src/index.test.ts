@@ -57,6 +57,12 @@ jest.unmock('@sentry/browser');
 const mockRecord = rrweb.record as RecordMock;
 
 jest.useFakeTimers({ advanceTimers: true });
+
+async function advanceTimers(time: number) {
+  jest.advanceTimersByTime(time);
+  await new Promise(process.nextTick);
+}
+
 class mockTransport {
   async sendEvent(e: Event) {
     return {
@@ -137,8 +143,6 @@ describe('SentryReplay', () => {
   });
 
   it('calls rrweb.record with custom options', async () => {
-    jest.advanceTimersByTime(1);
-
     expect(mockRecord.mock.calls[0][0]).toMatchInlineSnapshot(`
       Object {
         "blockClass": "sr-block",
@@ -151,7 +155,6 @@ describe('SentryReplay', () => {
   });
 
   it('should have a session after setup', () => {
-    jest.advanceTimersByTime(1);
     expect(replay.session).toMatchObject({
       lastActivity: BASE_TIMESTAMP,
       started: BASE_TIMESTAMP,
@@ -244,8 +247,7 @@ describe('SentryReplay', () => {
     mockRecord._emitter(TEST_EVENT);
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
-    await new Promise(process.nextTick);
+    await advanceTimers(ELAPSED);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
@@ -286,8 +288,8 @@ describe('SentryReplay', () => {
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
     mockSendReplayRequest.mockClear();
-    jest.advanceTimersByTime(5000);
-    await new Promise(process.nextTick);
+    await advanceTimers(5000);
+
     expect(replay).not.toHaveSentReplay();
 
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
@@ -298,15 +300,14 @@ describe('SentryReplay', () => {
     // Let's make sure it continues to work
     mockSendReplayRequest.mockClear();
     mockRecord._emitter(TEST_EVENT);
-    jest.advanceTimersByTime(5000);
-    await new Promise(process.nextTick);
+    await advanceTimers(5000);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // Clean-up
     mockSendReplayRequest.mockReset();
   });
 
-  it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', () => {
+  it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
     const initialSession = replay.session;
 
     expect(initialSession.id).toBeDefined();
@@ -323,6 +324,8 @@ describe('SentryReplay', () => {
     };
     mockRecord._emitter(TEST_EVENT);
     expect(replay).not.toHaveSentReplay();
+
+    await new Promise(process.nextTick);
 
     // Instead of recording the above event, a full snapshot will occur.
     //
@@ -350,14 +353,8 @@ describe('SentryReplay', () => {
     });
 
     // Pretend 5 seconds have passed
-    const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    await advanceTimers(5000);
 
-    await new Promise(process.nextTick);
-
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
     expect(replay).toHaveSentReplay(
       JSON.stringify([
         {
@@ -366,7 +363,7 @@ describe('SentryReplay', () => {
           data: {
             tag: 'breadcrumb',
             payload: {
-              timestamp: BASE_TIMESTAMP,
+              timestamp: BASE_TIMESTAMP / 1000,
               type: 'default',
               category: `ui.click`,
               message: '<unknown>',
