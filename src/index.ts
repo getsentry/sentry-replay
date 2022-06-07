@@ -3,7 +3,7 @@ import { captureEvent } from '@sentry/browser';
 import { addInstrumentationHandler, uuid4 } from '@sentry/utils';
 import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
-import { record } from 'rrweb';
+import { EventType, record } from 'rrweb';
 
 import {
   createPerformanceEntries,
@@ -208,7 +208,6 @@ export class SentryReplay implements Integration {
         this.addUpdate(() => {
           // We need to clear existing events on a checkout, otherwise they are
           // incremental event updates and should be appended
-          // TODO: Handle checkouts
           this.eventBuffer.addEvent(event, isCheckout);
 
           // This event type is a fullsnapshot, we should save immediately when this occurs
@@ -439,7 +438,7 @@ export class SentryReplay implements Integration {
 
     this.addUpdate(() => {
       this.eventBuffer.addEvent({
-        type: 5, // TODO add correct type here
+        type: EventType.Custom,
         // TODO: We were converting from ms to seconds for breadcrumbs, spans,
         // but maybe we should just keep them as milliseconds
         timestamp:
@@ -478,7 +477,7 @@ export class SentryReplay implements Integration {
   createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
     entries.forEach(({ type, start, end, name, data }) => {
       this.eventBuffer.addEvent({
-        type: 5, // TODO add correct type
+        type: EventType.Custom,
         timestamp: start,
         data: {
           tag: 'performanceSpan',
@@ -584,7 +583,6 @@ export class SentryReplay implements Integration {
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
   async sendReplayRequest({ endpoint, events }: ReplayRequest) {
-    // TODO: add spans and breadcrumbs back into req
     const formData = new FormData();
     const payloadBlob = new Blob([events], {
       type: 'application/json',
@@ -637,7 +635,6 @@ export class SentryReplay implements Integration {
       this.resetRetries();
       return true;
     } catch (ex) {
-      // TODO: re-implement catch logic with eventBuffer
       // we have to catch this otherwise it throws an infinite loop in Sentry
       console.error(ex);
 

@@ -1,4 +1,5 @@
 jest.mock('rrweb', () => {
+  const ActualRrweb = jest.requireActual('rrweb');
   const mockRecordFn: jest.Mock & Partial<RecordAdditionalProperties> = jest.fn(
     ({ emit }) => {
       mockRecordFn._emitter = emit;
@@ -20,6 +21,7 @@ jest.mock('rrweb', () => {
   });
 
   return {
+    ...ActualRrweb,
     record: mockRecordFn as RecordMock,
   };
 });
