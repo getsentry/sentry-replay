@@ -20,3 +20,20 @@ export interface ReplayRequest {
 }
 
 export type InstrumentationType = 'scope' | 'dom' | 'fetch' | 'xhr';
+
+/**
+ * The request payload to worker
+ */
+export interface WorkerRequest {
+  method: string;
+  args: any[];
+}
+
+/**
+ * The response from the worker
+ */
+export interface WorkerResponse {
+  method: string;
+  success: boolean;
+  response: string | Uint8Array;
+}

@@ -1,4 +1,4 @@
-import { RRWebEvent } from './types';
+import { RRWebEvent, WorkerResponse } from './types';
 import { logger } from './util/logger';
 import workerString from './worker/worker.js';
 
@@ -10,16 +10,25 @@ declare global {
 
 export function createEventBuffer() {
   if (window.Worker && !window.__SENTRY_USE_ARRAY_BUFFER) {
-    logger.log('using compression worker');
-    return new EventBufferCompressionWorker();
+    const workerBlob = new Blob([workerString]);
+    const workerUrl = URL.createObjectURL(workerBlob);
+
+    try {
+      logger.log('using compression worker');
+      return new EventBufferCompressionWorker(new Worker(workerUrl));
+    } catch {
+      // catch and ignore, fallback to simple event buffer
+    }
   }
+
   logger.log('falling back to simple event buffer');
   return new EventBufferArray();
 }
 
-interface IEventBuffer {
+export interface IEventBuffer {
   get length(): number;
-  addEvent(event: RRWebEvent): void;
+  destroy(): void;
+  addEvent(event: RRWebEvent, isCheckout?: boolean): void;
   finish(): Promise<string | Uint8Array>;
 }
 
@@ -30,16 +39,28 @@ class EventBufferArray implements IEventBuffer {
     this.events = [];
   }
 
+  destroy() {
+    this.events = [];
+  }
+
   get length() {
     return this.events.length;
   }
 
-  addEvent(event: RRWebEvent) {
+  addEvent(event: RRWebEvent, isCheckout?: boolean) {
+    if (isCheckout) {
+      this.events = [event];
+      return;
+    }
+
     this.events.push(event);
   }
 
   finish() {
     return new Promise<string>((resolve) => {
+      // Make a copy of the events array reference and immediately clear the
+      // events member so that we do not lose new events while uploading
+      // attachment.
       const eventsRet = this.events;
       this.events = [];
       resolve(JSON.stringify(eventsRet));
@@ -47,18 +68,13 @@ class EventBufferArray implements IEventBuffer {
   }
 }
 
-class EventBufferCompressionWorker implements IEventBuffer {
+// exporting for testing
+export class EventBufferCompressionWorker implements IEventBuffer {
   private worker: Worker;
   private eventBufferItemLength = 0;
-  constructor() {
-    const workerBlob = new Blob([workerString]);
-    const workerUrl = URL.createObjectURL(workerBlob);
 
-    if (typeof Worker !== 'undefined') {
-      this.worker = new Worker(workerUrl);
-    } else {
-      throw new Error('Web worker is not available in browser');
-    }
+  constructor(worker: Worker) {
+    this.worker = worker;
   }
 
   init() {
@@ -66,34 +82,73 @@ class EventBufferCompressionWorker implements IEventBuffer {
     logger.log('Message posted to worker');
   }
 
+  destroy() {
+    this.worker.terminate();
+    this.worker = null;
+  }
+
   get length() {
     return this.eventBufferItemLength;
   }
 
-  addEvent(data: RRWebEvent) {
+  addEvent(event: RRWebEvent, isCheckout?: boolean) {
+    // If it is a checkout we should make sure worker buffer is cleared before proceeding
+    if (!isCheckout) {
+      this.sendEventToWorker(event);
+      return;
+    }
+
+    const initListener = ({ data }: MessageEvent<WorkerResponse>) => {
+      if (data.method !== 'init') {
+        return;
+      }
+
+      if (!data.success) {
+        // TODO: Do some error handling, not sure what
+        logger.error(data.response);
+        return;
+      }
+
+      // Worker has been re-initialized, can add event now
+      this.sendEventToWorker(event);
+      this.worker.removeEventListener('message', initListener);
+    };
+    this.worker.addEventListener('message', initListener);
+
+    this.worker.postMessage({ method: 'init', args: [] });
+  }
+
+  sendEventToWorker(event: RRWebEvent) {
     this.worker.postMessage({
       method: 'addEvent',
-      args: [data],
+      args: [event],
     });
     logger.log('Message posted to worker');
     this.eventBufferItemLength++;
   }
 
   finish() {
-    return new Promise<Uint8Array>((resolve, reject) => {
-      const self = this;
+    return new Promise<Uint8Array>((resolve) => {
+      const finishListener = ({ data }: MessageEvent<WorkerResponse>) => {
+        if (data.method !== 'finish') {
+          return;
+        }
+
+        if (!data.success) {
+          // TODO: Do some error handling, not sure what
+          logger.error(data.response);
+          return;
+        }
+
+        logger.log('sending compressed');
+        resolve(data.response as Uint8Array);
+        this.eventBufferItemLength = 0;
+        this.worker.removeEventListener('message', finishListener);
+      };
+      this.worker.addEventListener('message', finishListener);
+
       this.worker.postMessage({ method: 'finish', args: [] });
       logger.log('Message posted to worker');
-      this.worker.onmessage = function finishListener(e) {
-        logger.log('Message received from worker');
-        if (e.data.final) {
-          logger.log('sending compressed');
-          const final = e.data.final as Uint8Array;
-          resolve(final);
-          self.eventBufferItemLength = 0; // self = instance of EventBufferCompressionWorker
-          this.removeEventListener('onmessage', finishListener);
-        }
-      };
     });
   }
 }

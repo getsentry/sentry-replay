@@ -10,7 +10,7 @@ import {
   createMemoryEntry,
   ReplayPerformanceEntry,
 } from './createPerformanceEntry';
-import { createEventBuffer } from './eventBuffer';
+import { createEventBuffer, IEventBuffer } from './eventBuffer';
 import { ReplaySession } from './session';
 import {
   REPLAY_EVENT_NAME,
@@ -36,14 +36,6 @@ import { handleDom, handleScope, handleFetch, handleXhr } from './coreHandlers';
  * Returns true if we want to flush immediately, otherwise continue with normal batching
  */
 type AddUpdateCallback = () => boolean | void;
-
-type RRWebPayload = string | Uint8Array;
-
-interface EventBuffer {
-  addEvent: (event: RRWebEvent) => void;
-  length: number;
-  finish: () => Promise<RRWebPayload>;
-}
 
 interface PluginOptions {
   /**
@@ -83,7 +75,7 @@ export class SentryReplay implements Integration {
    */
   public name: string = SentryReplay.id;
 
-  public eventBuffer: EventBuffer;
+  public eventBuffer: IEventBuffer;
 
   /**
    * Buffer of breadcrumbs to be uploaded
@@ -208,7 +200,7 @@ export class SentryReplay implements Integration {
           // We need to clear existing events on a checkout, otherwise they are
           // incremental event updates and should be appended
           // TODO: Handle checkouts
-          this.eventBuffer.addEvent(event);
+          this.eventBuffer.addEvent(event, isCheckout);
 
           // This event type is a fullsnapshot, we should save immediately when this occurs
           // See https://github.com/rrweb-io/rrweb/blob/d8f9290ca496712aa1e7d472549480c4e7876594/packages/rrweb/src/types.ts#L16
@@ -278,8 +270,9 @@ export class SentryReplay implements Integration {
   /**
    * Currently, this needs to be manually called (e.g. for tests). Sentry SDK does not support a teardown
    */
-  teardown() {
+  destroy() {
     this.removeListeners();
+    this.eventBuffer.destroy();
   }
 
   clearSession() {
@@ -602,22 +595,17 @@ export class SentryReplay implements Integration {
    * Finalize and send the current replay event to Sentry
    */
   async sendReplay(eventId: string, events: Uint8Array | string) {
-    // short circuit if theres no events to upload
+    // short circuit if there's no events to upload
     if (!events.length) {
       return;
     }
-
-    // Make a copy of the events array reference and immediately clear the
-    // events member so that we do not lose new events while uploading
-    // attachment.
-    // const eventsTemp = this.eventBuffer.events;
-    // this.eventBuffer.finish();
 
     const client = Sentry.getCurrentHub().getClient();
     const endpoint = SentryReplay.attachmentUrlFromDsn(
       client.getDsn(),
       eventId
     );
+
     try {
       await this.sendReplayRequest({
         endpoint,
@@ -627,21 +615,20 @@ export class SentryReplay implements Integration {
       return true;
     } catch (ex) {
       // TODO: re-implement catch logic with eventBuffer
-      // // we have to catch this otherwise it throws an infinite loop in Sentry
-      // console.error(ex);
-      // // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
-      // this.events = [...events, ...this.events];
-      // this.replaySpans = [...replaySpans, ...this.replaySpans];
-      // this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
-      // if (this.retryCount >= MAX_RETRY_COUNT) {
-      //   this.resetRetries();
-      // } else {
-      //   this.retryCount = this.retryCount + 1;
-      //   // will retry in intervals of 5, 10, 15, 20, 25 seconds
-      //   this.retryInterval = this.retryCount * this.retryInterval;
-      //   setTimeout(() => this.sendReplay(eventId), this.retryInterval);
-      // }
-      // return false;
+      // we have to catch this otherwise it throws an infinite loop in Sentry
+      console.error(ex);
+
+      // If an error happened here, it's likely that uploading the attachment
+      // failed, we'll can retry with the same events payload
+      if (this.retryCount >= MAX_RETRY_COUNT) {
+        this.resetRetries();
+      } else {
+        this.retryCount = this.retryCount + 1;
+        // will retry in intervals of 5, 10, 15, 20, 25 seconds
+        this.retryInterval = this.retryCount * this.retryInterval;
+        setTimeout(() => this.sendReplay(eventId, events), this.retryInterval);
+      }
+      return false;
     }
   }
 }

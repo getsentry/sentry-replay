@@ -26,7 +26,6 @@ jest.mock('rrweb', () => {
 
 import * as Sentry from '@sentry/browser';
 import * as SentryUtils from '@sentry/utils';
-import type { Breadcrumbs } from '@sentry/browser/types/integrations';
 import * as rrweb from 'rrweb';
 
 import { SentryReplay } from '@';
@@ -35,7 +34,8 @@ import {
   VISIBILITY_CHANGE_TIMEOUT,
 } from '@/session/constants';
 import { BASE_TIMESTAMP } from '@test';
-import { ReplaySpan, RRWebEvent } from '@/types';
+import { RRWebEvent } from '@/types';
+import { Transport } from '@sentry/types';
 
 type RecordAdditionalProperties = {
   takeFullSnapshot: jest.Mock;
@@ -63,7 +63,13 @@ async function advanceTimers(time: number) {
   await new Promise(process.nextTick);
 }
 
-class mockTransport {
+class mockTransport implements Transport {
+  async send() {
+    return;
+  }
+  async flush() {
+    return true;
+  }
   async sendEvent(e: Event) {
     return {
       status: 'skipped',
@@ -111,9 +117,7 @@ describe('SentryReplay', () => {
       integrations: [replay],
       autoSessionTracking: false,
       sendClientReports: false,
-      // debug: true,
-      // @ts-expect-error testing
-      transport: mockTransport,
+      transport: () => new mockTransport(),
     });
     jest.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
@@ -139,7 +143,7 @@ describe('SentryReplay', () => {
   });
 
   afterAll(() => {
-    replay && replay.teardown();
+    replay && replay.destroy();
   });
 
   it('calls rrweb.record with custom options', async () => {
@@ -380,7 +384,7 @@ describe('SentryReplay', () => {
     expect(replay.breadcrumbs).toHaveLength(0);
   });
 
-  it.skip('fails to upload data on first call and retries after five seconds, sending successfully', async () => {
+  it('fails to upload data on first call and retries after five seconds, sending successfully', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     // Suppress console.errors
     jest.spyOn(console, 'error').mockImplementation(jest.fn());
@@ -391,46 +395,39 @@ describe('SentryReplay', () => {
     mockSendReplayRequest.mockImplementationOnce(() => {
       throw new Error('Something bad happened');
     });
-    mockSendReplayRequest.mockImplementationOnce(() => {
-      return Promise.resolve();
-    });
-
     mockRecord._emitter(TEST_EVENT);
+
+    await new Promise(process.nextTick);
+
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+
     // Reset console.error mock to minimize the amount of time we are hiding
     // console messages in case an error happens after
     mockConsole.mockClear();
-    jest.advanceTimersToNextTimer();
-    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
-
-    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(2);
-
-    const replayRequestPayload = {
-      endpoint: expect.stringMatching(regex),
-      events: [TEST_EVENT],
-      replaySpans: <ReplaySpan[]>[],
-      breadcrumbs: <Breadcrumbs[]>[],
-    };
-
-    expect(replay.sendReplayRequest).toHaveBeenNthCalledWith(
-      1,
-      replayRequestPayload
-    );
-
-    expect(replay.sendReplayRequest).toHaveBeenNthCalledWith(
-      2,
-      replayRequestPayload
-    );
+    // next tick should retry and succeed
+    mockSendReplayRequest.mockReset();
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      return Promise.resolve();
+    });
+    advanceTimers(5000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
     expect(replay.session.sequenceId).toBe(1);
 
-    // events array should be empty
-    // expect(replay.events).toHaveLength(0);
+    // next tick should do nothing
+
+    mockSendReplayRequest.mockReset();
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      return Promise.resolve();
+    });
+    advanceTimers(5000);
+    expect(replay.sendReplayRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -494,7 +491,7 @@ describe('SentryReplay (no sticky)', () => {
   });
 
   afterAll(() => {
-    replay && replay.teardown();
+    replay && replay.destroy();
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
