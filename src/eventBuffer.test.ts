@@ -7,7 +7,7 @@ import pako from 'pako';
 const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
 
 it('adds events to normal event buffer', async function () {
-  const buffer = createEventBuffer();
+  const buffer = createEventBuffer({ useCompression: false });
 
   buffer.addEvent(TEST_EVENT);
   buffer.addEvent(TEST_EVENT);
@@ -18,7 +18,7 @@ it('adds events to normal event buffer', async function () {
 });
 
 it('adds checkout event to normal event buffer', async function () {
-  const buffer = createEventBuffer();
+  const buffer = createEventBuffer({ useCompression: false });
 
   buffer.addEvent(TEST_EVENT);
   buffer.addEvent(TEST_EVENT);

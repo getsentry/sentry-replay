@@ -52,6 +52,13 @@ interface PluginOptions {
    * If false, will create a new session per pageload
    */
   stickySession?: boolean;
+
+  /**
+   * Attempt to use compression when web workers are available
+   *
+   * (default is true)
+   */
+  useCompression?: boolean;
 }
 
 interface SentryReplayConfiguration extends PluginOptions {
@@ -130,6 +137,7 @@ export class SentryReplay implements Integration {
     uploadMinDelay = 5000,
     uploadMaxDelay = 15000,
     stickySession = false, // TBD: Making this opt-in for now
+    useCompression = true,
     rrwebConfig: {
       maskAllInputs = true,
       blockClass = 'sr-block',
@@ -147,7 +155,7 @@ export class SentryReplay implements Integration {
     };
 
     this.options = { uploadMinDelay, uploadMaxDelay, stickySession };
-    this.eventBuffer = createEventBuffer();
+    this.eventBuffer = createEventBuffer({ useCompression });
   }
 
   setupOnce() {

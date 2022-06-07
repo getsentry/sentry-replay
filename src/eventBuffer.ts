@@ -8,8 +8,12 @@ declare global {
   }
 }
 
-export function createEventBuffer() {
-  if (window.Worker && !window.__SENTRY_USE_ARRAY_BUFFER) {
+interface CreateEventBufferParams {
+  useCompression: boolean;
+}
+
+export function createEventBuffer({ useCompression }: CreateEventBufferParams) {
+  if (useCompression && window.Worker && !window.__SENTRY_USE_ARRAY_BUFFER) {
     const workerBlob = new Blob([workerString]);
     const workerUrl = URL.createObjectURL(workerBlob);
 
