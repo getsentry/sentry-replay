@@ -46,6 +46,7 @@
     "eslint-plugin-prettier": "^4.0.0",
     "husky": ">=6",
     "jest": "^28.1.1",
+    "jest-environment-jsdom": "^28.1.1",
     "lint-staged": ">=10",
     "prettier": "^2.5.1",
     "rimraf": "^3.0.2",
@@ -60,7 +61,6 @@
     "@sentry/browser": ">=6.18.2",
     "@sentry/hub": "^7.0.0",
     "@sentry/utils": "^7.0.0",
-    "jest-environment-jsdom": "^28.1.1",
     "pako": "^2.0.4",
     "rrweb": "^1.1.3"
   },
