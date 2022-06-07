@@ -52,7 +52,6 @@ type RecordMock = jest.MockedFunction<typeof rrweb.record> &
   RecordAdditionalProperties;
 
 jest.unmock('@sentry/browser');
-// jest.mock('./session/createSession');
 
 const mockRecord = rrweb.record as RecordMock;
 
