@@ -633,7 +633,6 @@ export class SentryReplay implements Integration {
       eventId
     );
 
-    console.log('b crumbs!', breadcrumbs);
     try {
       await this.sendReplayRequest({
         endpoint,
