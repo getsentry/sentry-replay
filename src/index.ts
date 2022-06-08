@@ -604,6 +604,14 @@ export class SentryReplay implements Integration {
     this.retryInterval = BASE_RETRY_INTERVAL;
   }
 
+  removeDuplicateBreadcrumbs(breadcrumbs: Breadcrumb[]): Breadcrumb[] {
+    const crumbsObj: { [key: string]: Breadcrumb } = {};
+    breadcrumbs.forEach((breadcrumb) => {
+      crumbsObj[JSON.stringify(breadcrumb)] = breadcrumb;
+    });
+    return Object.values(crumbsObj);
+  }
+
   /**
    * Finalize and send the current replay event to Sentry
    */
@@ -622,8 +630,7 @@ export class SentryReplay implements Integration {
     // attachment.
     const events = this.events;
     const replaySpans = this.replaySpans;
-    const breadcrumbs = this.breadcrumbs;
-    this.replaySpans = [];
+    const breadcrumbs = this.removeDuplicateBreadcrumbs(this.breadcrumbs);
     this.breadcrumbs = [];
     this.events = [];
 
