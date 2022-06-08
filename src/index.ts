@@ -633,6 +633,7 @@ export class SentryReplay implements Integration {
       eventId
     );
 
+    console.log('b crumbs!', breadcrumbs);
     try {
       await this.sendReplayRequest({
         endpoint,
@@ -648,7 +649,7 @@ export class SentryReplay implements Integration {
       // If an error happened here, it's likely that uploading the attachment failed, we'll want to restore the events that failed to upload
       this.events = [...events, ...this.events];
       this.replaySpans = [...replaySpans, ...this.replaySpans];
-      this.breadcrumbs = [...replaySpans, ...this.breadcrumbs];
+      this.breadcrumbs = [...breadcrumbs, ...this.breadcrumbs];
 
       if (this.retryCount >= MAX_RETRY_COUNT) {
         this.resetRetries();
