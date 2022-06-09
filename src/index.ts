@@ -661,7 +661,6 @@ export class SentryReplay implements Integration {
       if (this.retryCount >= MAX_RETRY_COUNT) {
         this.resetRetries();
       } else {
-        console.log('TRYING AGAIN!!');
         this.retryCount = this.retryCount + 1;
         // will retry in intervals of 5, 10, 15, 20, 25 seconds
         this.retryInterval = this.retryCount * this.retryInterval;
