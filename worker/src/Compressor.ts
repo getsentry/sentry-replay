@@ -20,7 +20,7 @@ export class Compressor {
     this.deflate = new Deflate();
 
     // Fake an array by adding a `[`
-    this.deflate.push('[', constants.Z_SYNC_FLUSH);
+    this.deflate.push('[', constants.Z_NO_FLUSH);
 
     return true;
   }
@@ -29,7 +29,10 @@ export class Compressor {
     // If the event is not the first event, we need to prefix it with a `,` so
     // that we end up with a list of events
     const prefix = this.added > 0 ? ',' : '';
-    this.deflate.push(prefix + JSON.stringify(data), constants.Z_SYNC_FLUSH);
+    // TODO: We may want Z_SYNC_FLUSH or Z_FULL_FLUSH (not sure the difference)
+    // Using NO_FLUSH here for now as we can create many attachments that our
+    // web UI will get API rate limited.
+    this.deflate.push(prefix + JSON.stringify(data), constants.Z_NO_FLUSH);
     this.added++;
 
     return true;
