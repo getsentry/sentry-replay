@@ -1,4 +1,5 @@
 import { record } from 'rrweb';
+import { getCurrentHub } from '@sentry/browser';
 
 export interface ReplayPerformanceEntry {
   /**
@@ -96,6 +97,14 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
     startTime,
     transferSize,
   } = entry;
+
+  // Do not capture fetches to Sentry ingestion endpoint
+  const { host, protocol } = getCurrentHub()?.getClient()?.getDsn() || {};
+  if (name.startsWith(`${protocol}:${host}`)) {
+    return null;
+  }
+
+  console.log(entry);
 
   return {
     type: `${entryType}.${initiatorType}`,
