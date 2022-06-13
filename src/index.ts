@@ -436,6 +436,10 @@ export class SentryReplay implements Integration {
       return;
     }
 
+    if (['sentry.transaction'].includes(result.category)) {
+      return;
+    }
+
     this.addUpdate(() => {
       this.eventBuffer.addEvent({
         type: EventType.Custom,
