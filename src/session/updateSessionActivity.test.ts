@@ -1,20 +1,22 @@
+import { it, expect, beforeAll, afterEach, vi } from 'vitest';
+
 import * as CreateSession from './createSession';
 import * as FetchSession from './fetchSession';
 import * as SaveSession from './saveSession';
 import { updateSessionActivity } from './updateSessionActivity';
 
 beforeAll(() => {
-  jest.spyOn(CreateSession, 'createSession');
-  jest.spyOn(FetchSession, 'fetchSession');
-  jest.spyOn(SaveSession, 'saveSession');
+  vi.spyOn(CreateSession, 'createSession');
+  vi.spyOn(FetchSession, 'fetchSession');
+  vi.spyOn(SaveSession, 'saveSession');
   window.sessionStorage.clear();
 });
 
 afterEach(() => {
   window.sessionStorage.clear();
-  (CreateSession.createSession as jest.Mock).mockClear();
-  (FetchSession.fetchSession as jest.Mock).mockClear();
-  (SaveSession.saveSession as jest.Mock).mockClear();
+  (CreateSession.createSession as vi.Mock).mockClear();
+  (FetchSession.fetchSession as vi.Mock).mockClear();
+  (SaveSession.saveSession as vi.Mock).mockClear();
 });
 
 it('does nothing if no sticky session', () => {
@@ -36,7 +38,7 @@ it('creates a new session if no existing one', () => {
 it('updates an existing session', () => {
   const now = new Date().getTime();
   const lastActivity = now - 10000;
-  const saveSession = SaveSession.saveSession as jest.Mock;
+  const saveSession = SaveSession.saveSession as vi.Mock;
 
   saveSession({
     id: 'transaction_id',

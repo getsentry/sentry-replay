@@ -1,12 +1,14 @@
+import { it, expect, vi, beforeAll, afterEach } from 'vitest';
+
 import * as CreateSession from './createSession';
 import * as FetchSession from './fetchSession';
 import { getSession } from './getSession';
 import { saveSession } from './saveSession';
 
-jest.mock('@sentry/utils', () => {
+vi.mock('@sentry/utils', () => {
   return {
-    ...(jest.requireActual('@sentry/utils') as { string: unknown }),
-    uuid4: jest.fn(() => 'test_session_id'),
+    ...require('@sentry/utils'),
+    uuid4: vi.fn(() => 'test_session_id'),
   };
 });
 
@@ -20,15 +22,15 @@ function createMockSession(when: number = new Date().getTime()) {
 }
 
 beforeAll(() => {
-  jest.spyOn(CreateSession, 'createSession');
-  jest.spyOn(FetchSession, 'fetchSession');
+  vi.spyOn(CreateSession, 'createSession');
+  vi.spyOn(FetchSession, 'fetchSession');
   window.sessionStorage.clear();
 });
 
 afterEach(() => {
   window.sessionStorage.clear();
-  (CreateSession.createSession as jest.Mock).mockClear();
-  (FetchSession.fetchSession as jest.Mock).mockClear();
+  (CreateSession.createSession as vi.Mock).mockClear();
+  (FetchSession.fetchSession as vi.Mock).mockClear();
 });
 
 it('creates a non-sticky session when one does not exist', function () {

@@ -1,3 +1,5 @@
+import { expect } from 'vitest';
+
 import type { RRWebEvent } from '@/types';
 
 import { SentryReplay } from '@';

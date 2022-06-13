@@ -1,3 +1,5 @@
+import { vi, it, expect } from 'vitest';
+
 import { BASE_TIMESTAMP } from '@test';
 import { createEventBuffer, EventBufferCompressionWorker } from './eventBuffer';
 import { handleMessage } from '../worker/src/handleMessage';
@@ -30,7 +32,7 @@ it('adds checkout event to normal event buffer', async function () {
   expect(result).toEqual(JSON.stringify([TEST_EVENT]));
 });
 
-const workerPostMessage = jest.fn();
+const workerPostMessage = vi.fn();
 window.postMessage = workerPostMessage;
 
 class MockWorker implements Worker {

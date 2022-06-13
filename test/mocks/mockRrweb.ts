@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { BASE_TIMESTAMP } from '@test';
 import { RRWebEvent } from '@/types';
 
@@ -16,14 +17,14 @@ type RecordAdditionalProperties = {
 export type RecordMock = jest.MockedFunction<typeof rrweb.record> &
   RecordAdditionalProperties;
 
-jest.mock('rrweb', () => {
-  const ActualRrweb = jest.requireActual('rrweb');
-  const mockRecordFn: jest.Mock & Partial<RecordAdditionalProperties> = jest.fn(
+vi.mock('rrweb', async () => {
+  const actual = await vi.importActual('rrweb');
+  const mockRecordFn: vi.Mock & Partial<RecordAdditionalProperties> = vi.fn(
     ({ emit }) => {
       mockRecordFn._emitter = emit;
     }
   );
-  mockRecordFn.takeFullSnapshot = jest.fn((isCheckout) => {
+  mockRecordFn.takeFullSnapshot = vi.fn((isCheckout) => {
     if (!mockRecordFn._emitter) {
       return;
     }
@@ -39,12 +40,12 @@ jest.mock('rrweb', () => {
   });
 
   return {
-    ...ActualRrweb,
+    ...actual,
     record: mockRecordFn as RecordMock,
   };
 });
 
-// Intended to be after `mock('rrweb')`
+// XXX: Intended to be after `mock('rrweb')`
 import * as rrweb from 'rrweb';
 
 export function mockRrweb() {

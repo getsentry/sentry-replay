@@ -1,3 +1,5 @@
+import { it, expect } from 'vitest';
+
 import { isSessionExpired } from './isSessionExpired';
 
 function createSession(extra?: Record<string, any>) {

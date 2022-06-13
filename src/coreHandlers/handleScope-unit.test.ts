@@ -1,19 +1,21 @@
+import { beforeAll, vi, it, expect, MockedFunction } from 'vitest';
+
 import * as HandleScope from './handleScope';
 import { mockSdk } from '@test';
 import { getCurrentHub } from '@sentry/browser';
 
-let mockHandleScope: jest.MockedFunction<typeof HandleScope.handleScope>;
+let mockHandleScope: MockedFunction<typeof HandleScope.handleScope>;
 
-jest.useFakeTimers();
+vi.useFakeTimers();
 
 beforeAll(function () {
   mockSdk();
-  jest.spyOn(HandleScope, 'handleScope');
-  mockHandleScope = HandleScope.handleScope as jest.MockedFunction<
+  vi.spyOn(HandleScope, 'handleScope');
+  mockHandleScope = HandleScope.handleScope as MockedFunction<
     typeof HandleScope.handleScope
   >;
 
-  jest.runAllTimers();
+  vi.runAllTimers();
 });
 
 it('returns a breadcrumb only if last breadcrumb has changed (integration)', function () {

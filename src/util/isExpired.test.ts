@@ -1,3 +1,5 @@
+import { it, expect } from 'vitest';
+
 import { isExpired } from './isExpired';
 
 it('is expired', function () {

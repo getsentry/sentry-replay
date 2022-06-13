@@ -1,9 +1,11 @@
-import { Scope } from '@sentry/hub';
-import { Breadcrumb } from '@sentry/types';
+import { vi, it, expect, MockedFunction } from 'vitest';
+
+import type { Scope } from '@sentry/hub';
+import type { Breadcrumb } from '@sentry/types';
 import * as HandleScope from './handleScope';
 
-jest.spyOn(HandleScope, 'handleScope');
-const mockHandleScope = HandleScope.handleScope as jest.MockedFunction<
+vi.spyOn(HandleScope, 'handleScope');
+const mockHandleScope = HandleScope.handleScope as MockedFunction<
   typeof HandleScope.handleScope
 >;
 

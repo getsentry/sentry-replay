@@ -1,7 +1,19 @@
 // mock functions need to be imported first
 import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
 
-import * as SentryUtils from '@sentry/utils';
+import {
+  beforeAll,
+  beforeEach,
+  afterEach,
+  afterAll,
+  describe,
+  it,
+  expect,
+  vi,
+  MockedFunction,
+} from 'vitest';
+
+import { addInstrumentationHandler } from '@sentry/utils';
 
 import { SentryReplay } from '@';
 import {
@@ -9,48 +21,54 @@ import {
   VISIBILITY_CHANGE_TIMEOUT,
 } from '@/session/constants';
 
-jest.useFakeTimers({ advanceTimers: true });
+// jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
-  jest.advanceTimersByTime(time);
+  vi.advanceTimersByTime(time);
   await new Promise(process.nextTick);
 }
 
 describe('SentryReplay', () => {
   let replay: SentryReplay;
-  type MockSendReplayRequest = jest.MockedFunction<
-    typeof replay.sendReplayRequest
-  >;
+  type MockSendReplayRequest = MockedFunction<typeof replay.sendReplayRequest>;
   let mockSendReplayRequest: MockSendReplayRequest;
   let domHandler: (args: any) => any;
   const { record: mockRecord } = mockRrweb();
 
   beforeAll(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    jest
-      .spyOn(SentryUtils, 'addInstrumentationHandler')
-      .mockImplementation((_type, handler: (args: any) => any) => {
-        domHandler = handler;
-      });
-
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     ({ replay } = mockSdk());
-    jest.spyOn(replay, 'sendReplayRequest');
+    vi.spyOn(replay, 'sendReplayRequest');
+    vi.mock('@sentry/utils', async () => {
+      const actual = await vi.importActual('@sentry/utils');
+      return {
+        ...actual,
+        logger: actual.logger,
+        addInstrumentationHandler: vi.fn(),
+      };
+    });
+    addInstrumentationHandler.mockImplementation(
+      (_type, handler: (args: any) => any) => {
+        domHandler = handler;
+      }
+    );
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
     mockSendReplayRequest.mockImplementation(
-      jest.fn(async () => {
+      vi.fn(async () => {
         return;
       })
     );
-    jest.runAllTimers();
+    vi.runAllTimers();
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
   });
 
   afterEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
@@ -59,11 +77,12 @@ describe('SentryReplay', () => {
 
   afterAll(() => {
     replay && replay.destroy();
+    vi.unmock('@sentry/utils');
   });
 
   it('calls rrweb.record with custom options', async () => {
     expect(mockRecord.mock.calls[0][0]).toMatchInlineSnapshot(`
-      Object {
+      {
         "blockClass": "sr-block",
         "emit": [Function],
         "ignoreClass": "sr-test",
@@ -92,7 +111,7 @@ describe('SentryReplay', () => {
 
     const initialSession = replay.session;
 
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -116,7 +135,7 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -140,7 +159,7 @@ describe('SentryReplay', () => {
     });
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     replay.eventBuffer.addEvent(TEST_EVENT);
@@ -193,7 +212,7 @@ describe('SentryReplay', () => {
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
       mockRecord._emitter(TEST_EVENT);
-      jest.advanceTimersByTime(4000);
+      vi.advanceTimersByTime(4000);
     });
 
     // We are at time = +16seconds now (relative to BASE_TIMESTAMP)
@@ -232,7 +251,7 @@ describe('SentryReplay', () => {
     expect(initialSession.id).toBeDefined();
 
     // Idle for 15 minutes
-    jest.advanceTimersByTime(15 * 60000);
+    vi.advanceTimersByTime(15 * 60000);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.
@@ -272,7 +291,8 @@ describe('SentryReplay', () => {
     });
 
     // Pretend 5 seconds have passed
-    await advanceTimers(5000);
+    const ELAPSED = 5000;
+    await advanceTimers(ELAPSED);
 
     expect(replay).toHaveSentReplay(
       JSON.stringify([
@@ -302,10 +322,8 @@ describe('SentryReplay', () => {
   it('fails to upload data on first call and retries after five seconds, sending successfully', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     // Suppress console.errors
-    jest.spyOn(console, 'error').mockImplementation(jest.fn());
-    const mockConsole = console.error as jest.MockedFunction<
-      typeof console.error
-    >;
+    vi.spyOn(console, 'error').mockImplementation(vi.fn());
+    const mockConsole = console.error as MockedFunction<typeof console.error>;
     // fail the first request and pass the second one
     mockSendReplayRequest.mockImplementationOnce(() => {
       throw new Error('Something bad happened');
@@ -321,6 +339,8 @@ describe('SentryReplay', () => {
     // Reset console.error mock to minimize the amount of time we are hiding
     // console messages in case an error happens after
     mockConsole.mockClear();
+    vi.advanceTimersToNextTimer();
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
     // next tick should retry and succeed
     mockSendReplayRequest.mockReset();
@@ -336,7 +356,6 @@ describe('SentryReplay', () => {
     expect(replay.session.sequenceId).toBe(1);
 
     // next tick should do nothing
-
     mockSendReplayRequest.mockReset();
     mockSendReplayRequest.mockImplementationOnce(() => {
       return Promise.resolve();

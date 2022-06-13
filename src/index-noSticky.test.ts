@@ -1,48 +1,58 @@
 // mock functions need to be imported first
 import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
 
+import {
+  describe,
+  beforeAll,
+  beforeEach,
+  afterAll,
+  afterEach,
+  vi,
+  it,
+  expect,
+  MockedFunction,
+} from 'vitest';
+
 import { SentryReplay } from '@';
 import {
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
 } from '@/session/constants';
 
-jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
-  jest.advanceTimersByTime(time);
+  vi.advanceTimersByTime(time);
   await new Promise(process.nextTick);
 }
 
 describe('SentryReplay (no sticky)', () => {
   let replay: SentryReplay;
-  type MockSendReplayRequest = jest.MockedFunction<
-    typeof replay.sendReplayRequest
-  >;
+  type MockSendReplayRequest = MockedFunction<typeof replay.sendReplayRequest>;
   let mockSendReplayRequest: MockSendReplayRequest;
   const { record: mockRecord } = mockRrweb();
 
   beforeAll(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     ({ replay } = mockSdk({ replayOptions: { stickySession: false } }));
-    jest.spyOn(replay, 'sendReplayRequest');
+    vi.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
     mockSendReplayRequest.mockImplementation(
-      jest.fn(async () => {
+      vi.fn(async () => {
         return;
       })
     );
-    jest.runAllTimers();
+    vi.runAllTimers();
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
     mockRecord.takeFullSnapshot.mockClear();
   });
 
   afterEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
   });
@@ -61,7 +71,7 @@ describe('SentryReplay (no sticky)', () => {
 
     const initialSession = replay.session;
 
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -85,7 +95,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay).toHaveSameSession(initialSession);
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -110,7 +120,7 @@ describe('SentryReplay (no sticky)', () => {
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     replay.eventBuffer.addEvent(TEST_EVENT);
@@ -155,7 +165,7 @@ describe('SentryReplay (no sticky)', () => {
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
       mockRecord._emitter(TEST_EVENT);
-      jest.advanceTimersByTime(4000);
+      vi.advanceTimersByTime(4000);
     });
 
     // We are at time = +16seconds now (relative to BASE_TIMESTAMP)
@@ -193,7 +203,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(initialSession.id).toBeDefined();
 
     // Idle for 15 minutes
-    jest.advanceTimersByTime(15 * 60000);
+    vi.advanceTimersByTime(15 * 60000);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.

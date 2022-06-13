@@ -1,16 +1,18 @@
+import { it, expect, vi, beforeAll } from 'vitest';
+
 import * as Sentry from '@sentry/browser';
 import { createSession } from './createSession';
 import { saveSession } from './saveSession';
 
-type captureEventMockType = jest.MockedFunction<typeof Sentry.captureEvent>;
+type captureEventMockType = vi.MockedFunction<typeof Sentry.captureEvent>;
 
-jest.mock('./saveSession');
-jest.mock('@sentry/browser');
+vi.mock('./saveSession');
+vi.mock('@sentry/browser');
 
-jest.mock('@sentry/utils', () => {
+vi.mock('@sentry/utils', () => {
   return {
-    ...(jest.requireActual('@sentry/utils') as { string: unknown }),
-    uuid4: jest.fn(() => 'test_session_id'),
+    ...(require('@sentry/utils') as { string: unknown }),
+    uuid4: vi.fn(() => 'test_session_id'),
   };
 });
 

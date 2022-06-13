@@ -1,3 +1,5 @@
+import { it, expect } from 'vitest';
+
 import pako from 'pako';
 import { Compressor } from './Compressor';
 

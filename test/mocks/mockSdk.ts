@@ -1,4 +1,6 @@
-jest.unmock('@sentry/browser');
+import { vi } from 'vitest';
+
+vi.unmock('@sentry/browser');
 
 import { BrowserOptions, init } from '@sentry/browser';
 import { Transport } from '@sentry/types';
@@ -51,7 +53,7 @@ export function mockSdk({
   const replay = new SentryReplay(replayOptions);
 
   init({ ...sentryOptions, integrations: [replay] });
-  jest.spyOn(replay, 'sendReplayRequest');
+  vi.spyOn(replay, 'sendReplayRequest');
 
   return { replay };
 }

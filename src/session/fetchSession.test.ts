@@ -1,3 +1,5 @@
+import { beforeAll, afterEach, it, expect } from 'vitest';
+
 import { REPLAY_SESSION_KEY } from './constants';
 import { fetchSession } from './fetchSession';
 
