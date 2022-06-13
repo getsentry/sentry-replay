@@ -104,8 +104,6 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
     return null;
   }
 
-  console.log(entry);
-
   return {
     type: `${entryType}.${initiatorType}`,
     start: getAbsoluteTime(startTime),
