@@ -27,7 +27,7 @@ jobs:
           yarn install --frozen-lockfile
 
       - run: |
-          yarn test
+          yarn test:ci
 
       - run: |
           yarn pack

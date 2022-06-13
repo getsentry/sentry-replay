@@ -1,4 +1,4 @@
-import { describe, expect, jest, test } from '@jest/globals';
+import { describe, expect, MockedFunction, test, vi } from 'vitest';
 
 import { isSampled } from './isSampled';
 
@@ -15,8 +15,8 @@ const cases = [
   [0.5, 0.0, true],
 ];
 
-jest.spyOn(Math, 'random');
-const mockRandom = Math.random as jest.MockedFunction<typeof Math.random>;
+vi.spyOn(Math, 'random');
+const mockRandom = Math.random as MockedFunction<typeof Math.random>;
 
 describe('isSampled', () => {
   test.each(cases)(

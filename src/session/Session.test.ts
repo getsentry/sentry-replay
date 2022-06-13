@@ -1,19 +1,19 @@
-jest.mock('./saveSession');
+vi.mock('./saveSession');
 
-import { afterEach, beforeEach, expect, it, jest } from '@jest/globals';
 import * as Sentry from '@sentry/browser';
+import { afterEach, beforeEach, expect, it, MockedFunction, vi } from 'vitest';
 
 import { saveSession } from './saveSession';
 import { Session } from './Session';
 
-type captureEventMockType = jest.MockedFunction<typeof Sentry.captureEvent>;
+type captureEventMockType = MockedFunction<typeof Sentry.captureEvent>;
 
-jest.mock('@sentry/browser');
+vi.mock('@sentry/browser');
 
-jest.mock('@sentry/utils', () => {
+vi.mock('@sentry/utils', async () => {
   return {
-    ...(jest.requireActual('@sentry/utils') as { string: unknown }),
-    uuid4: jest.fn(() => 'test_session_id'),
+    ...((await vi.importActual('@sentry/utils')) as { string: unknown }),
+    uuid4: vi.fn(() => 'test_session_id'),
   };
 });
 
@@ -44,7 +44,7 @@ it('sticky Session saves to local storage', function () {
   expect(newSession.id).toBe('test_session_id');
   expect(newSession.segmentId).toBe(0);
 
-  (saveSession as jest.Mock).mockClear();
+  (saveSession as vi.Mock).mockClear();
 
   newSession.segmentId++;
   expect(saveSession).toHaveBeenCalledTimes(1);

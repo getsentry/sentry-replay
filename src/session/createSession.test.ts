@@ -1,28 +1,37 @@
-import { afterEach, beforeAll, expect, it, jest } from '@jest/globals';
 import * as Sentry from '@sentry/core';
+import * as SentryUtils from '@sentry/utils';
+import { afterEach, beforeAll, expect, it, MockedFunction, vi } from 'vitest';
 
 import { createSession } from './createSession';
 import { saveSession } from './saveSession';
 
-jest.mock('./saveSession');
+vi.mock('./saveSession');
 
-jest.mock('@sentry/utils', () => {
+vi.mock('@sentry/utils', async () => {
+  const actual = (await vi.importActual('@sentry/utils')) as typeof SentryUtils;
   return {
-    ...(jest.requireActual('@sentry/utils') as { string: unknown }),
-    uuid4: jest.fn(() => 'test_session_id'),
+    ...actual,
+    logger: actual.logger,
+    uuid4: vi.fn(() => 'test_session_id'),
   };
 });
 
-type captureEventMockType = jest.MockedFunction<typeof Sentry.captureEvent>;
+type captureEventMockType = MockedFunction<typeof Sentry.captureEvent>;
 
-const captureEventMock: captureEventMockType = jest.fn();
+const captureEventMock: captureEventMockType = vi.fn();
+
+vi.mock('@sentry/core', async () => {
+  const actual = (await vi.importActual('@sentry/core')) as typeof Sentry;
+  return {
+    ...actual,
+    getCurrentHub: vi.fn(() => ({
+      captureEvent: captureEventMock,
+    })),
+  };
+});
 
 beforeAll(() => {
   window.sessionStorage.clear();
-  jest.spyOn(Sentry, 'getCurrentHub');
-  (Sentry.getCurrentHub as jest.Mock).mockImplementation(() => ({
-    captureEvent: captureEventMock,
-  }));
 });
 
 afterEach(() => {

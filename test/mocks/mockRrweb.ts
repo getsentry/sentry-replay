@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { MockedFunction, SpyInstance, vi } from 'vitest';
 
 import { RecordingEvent } from '../../src/types';
 
@@ -14,17 +14,17 @@ type RecordAdditionalProperties = {
   _emitter: (event: RecordingEvent, ...args: any[]) => void;
 };
 
-export type RecordMock = jest.MockedFunction<typeof rrweb.record> &
+export type RecordMock = MockedFunction<typeof rrweb.record> &
   RecordAdditionalProperties;
 
-jest.mock('rrweb', () => {
-  const ActualRrweb = jest.requireActual('rrweb');
-  const mockRecordFn: jest.Mock & Partial<RecordAdditionalProperties> = jest.fn(
+vi.mock('rrweb', async () => {
+  const actual = (await vi.importActual('rrweb')) as typeof rrweb;
+  const mockRecordFn: SpyInstance & Partial<RecordAdditionalProperties> = vi.fn(
     ({ emit }) => {
       mockRecordFn._emitter = emit;
     }
   );
-  mockRecordFn.takeFullSnapshot = jest.fn((isCheckout) => {
+  mockRecordFn.takeFullSnapshot = vi.fn((isCheckout) => {
     if (!mockRecordFn._emitter) {
       return;
     }
@@ -40,8 +40,7 @@ jest.mock('rrweb', () => {
   });
 
   return {
-    // @ts-expect-error spreading actual rrweb library
-    ...ActualRrweb,
+    ...actual,
     record: mockRecordFn,
   };
 });

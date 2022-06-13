@@ -1,4 +1,5 @@
-// mock functions need to be imported first
+import * as SentryUtils from '@sentry/utils';
+import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import {
   afterAll,
   afterEach,
@@ -7,10 +8,9 @@ import {
   describe,
   expect,
   it,
-  jest,
-} from '@jest/globals';
-import * as SentryUtils from '@sentry/utils';
-import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
+  MockedFunction,
+  vi,
+} from 'vitest';
 
 import {
   SESSION_IDLE_DURATION,
@@ -18,10 +18,10 @@ import {
 } from './session/constants';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
-  jest.advanceTimersByTime(time);
+  vi.advanceTimersByTime(time);
   await new Promise(process.nextTick);
 }
 
@@ -31,28 +31,38 @@ describe('Replay (no sticky)', () => {
   const { record: mockRecord } = mockRrweb();
 
   beforeAll(async () => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    jest
-      .spyOn(SentryUtils, 'addInstrumentationHandler')
-      .mockImplementation((type, handler: (args: any) => any) => {
-        if (type === 'dom') {
-          domHandler = handler;
-        }
-      });
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.mock('@sentry/utils', async () => {
+      const actual = (await vi.importActual(
+        '@sentry/utils'
+      )) as typeof SentryUtils;
+      return {
+        ...actual,
+        logger: actual.logger,
+        addInstrumentationHandler: vi.fn(),
+      };
+    });
+    (
+      SentryUtils.addInstrumentationHandler as MockedFunction<
+        typeof SentryUtils.addInstrumentationHandler
+      >
+    ).mockImplementation((_type, handler: (args: any) => any) => {
+      if (_type === 'dom') {
+        domHandler = handler;
+      }
+    });
 
     ({ replay } = await mockSdk({ replayOptions: { stickySession: false } }));
-    jest.runAllTimers();
+    vi.runAllTimers();
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     mockRecord.takeFullSnapshot.mockClear();
   });
 
   afterEach(async () => {
-    jest.runAllTimers();
-    await new Promise(process.nextTick);
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
   });
@@ -71,7 +81,7 @@ describe('Replay (no sticky)', () => {
 
     const initialSession = replay.session;
 
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -95,7 +105,7 @@ describe('Replay (no sticky)', () => {
     expect(replay).toHaveSameSession(initialSession);
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -120,7 +130,7 @@ describe('Replay (no sticky)', () => {
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     replay.addEvent(TEST_EVENT);
@@ -153,7 +163,7 @@ describe('Replay (no sticky)', () => {
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     domHandler({
       name: 'click',
@@ -186,7 +196,7 @@ describe('Replay (no sticky)', () => {
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
       mockRecord._emitter(TEST_EVENT);
-      jest.advanceTimersByTime(4000);
+      vi.advanceTimersByTime(4000);
     });
 
     // We are at time = +16seconds now (relative to BASE_TIMESTAMP)
@@ -199,7 +209,7 @@ describe('Replay (no sticky)', () => {
     });
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
-    (global.fetch as jest.MockedFunction<typeof fetch>).mockClear();
+    (global.fetch as MockedFunction<typeof fetch>).mockClear();
     await advanceTimers(5000);
     expect(replay).not.toHaveSentReplay();
 
@@ -209,7 +219,7 @@ describe('Replay (no sticky)', () => {
     expect(replay.eventBuffer?.length).toBe(0);
 
     // Let's make sure it continues to work
-    (global.fetch as jest.MockedFunction<typeof fetch>).mockClear();
+    (global.fetch as MockedFunction<typeof fetch>).mockClear();
     mockRecord._emitter(TEST_EVENT);
     await advanceTimers(5000);
     expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
@@ -222,7 +232,7 @@ describe('Replay (no sticky)', () => {
 
     // Idle for 15 minutes
     const FIFTEEN_MINUTES = 15 * 60000;
-    jest.advanceTimersByTime(FIFTEEN_MINUTES);
+    vi.advanceTimersByTime(FIFTEEN_MINUTES);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.
@@ -258,7 +268,7 @@ describe('Replay (no sticky)', () => {
     await advanceTimers(5000);
 
     const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
-    const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+    const breadcrumbTimestamp = newTimestamp;
 
     expect(replay).toHaveSentReplay({
       events: JSON.stringify([

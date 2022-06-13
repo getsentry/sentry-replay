@@ -1,6 +1,6 @@
-import { expect, it } from '@jest/globals';
 
 import { Session } from '../session/Session';
+import { it, expect } from 'vitest';
 
 import { isSessionExpired } from './isSessionExpired';
 

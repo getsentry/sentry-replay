@@ -1,3 +1,6 @@
+import * as SentryUtils from '@sentry/utils';
+import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
+import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
 import {
   afterAll,
   afterEach,
@@ -6,11 +9,9 @@ import {
   describe,
   expect,
   it,
-  jest,
-} from '@jest/globals';
-import * as SentryUtils from '@sentry/utils';
-import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
-import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
+  MockedFunction,
+  vi,
+} from 'vitest';
 
 import {
   REPLAY_SESSION_KEY,
@@ -20,71 +21,80 @@ import {
 import * as CaptureInternalException from './util/captureInternalException';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
-  jest.advanceTimersByTime(time);
+  vi.advanceTimersByTime(time);
   await new Promise(process.nextTick);
 }
 
-type MockFetch = jest.MockedFunction<typeof fetch>;
+type MockFetch = MockedFunction<typeof fetch>;
 describe('Replay', () => {
   let replay: Replay;
   const prevLocation = window.location;
 
-  type MockSendReplayRequest = jest.MockedFunction<
-    typeof replay.sendReplayRequest
-  >;
+  type MockSendReplayRequest = MockedFunction<typeof replay.sendReplayRequest>;
   let mockSendReplayRequest: MockSendReplayRequest;
   let domHandler: (args: any) => any;
   const { record: mockRecord } = mockRrweb();
   let mockFetch: MockFetch;
 
-  jest.spyOn(CaptureInternalException, 'captureInternalException');
+  vi.spyOn(CaptureInternalException, 'captureInternalException');
 
   beforeAll(async () => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    jest
-      .spyOn(SentryUtils, 'addInstrumentationHandler')
-      .mockImplementation((type, handler: (args: any) => any) => {
-        if (type === 'dom') {
-          domHandler = handler;
-        }
-      });
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.mock('@sentry/utils', async () => {
+      const actual = (await vi.importActual(
+        '@sentry/utils'
+      )) as typeof SentryUtils;
+      return {
+        ...actual,
+        logger: actual.logger,
+        addInstrumentationHandler: vi.fn(),
+      };
+    });
+    (
+      SentryUtils.addInstrumentationHandler as MockedFunction<
+        typeof SentryUtils.addInstrumentationHandler
+      >
+    ).mockImplementation((_type, handler: (args: any) => any) => {
+      if (_type === 'dom') {
+        domHandler = handler;
+      }
+    });
 
     ({ replay } = await mockSdk());
-    jest.runAllTimers();
-    jest.spyOn(replay, 'flush');
-    jest.spyOn(replay, 'runFlush');
+    vi.runAllTimers();
+    vi.spyOn(replay, 'flush');
+    vi.spyOn(replay, 'runFlush');
     mockFetch = global.fetch as MockFetch;
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.eventBuffer?.destroy();
-    jest.spyOn(replay, 'sendReplayRequest');
+    vi.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
   });
 
   afterEach(async () => {
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
-    // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
-    delete window.location;
     Object.defineProperty(window, 'location', {
       value: prevLocation,
       writable: true,
     });
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSendReplayRequest.mockRestore();
   });
 
   afterAll(() => {
     replay && replay.stop();
+    vi.unmock('@sentry/utils');
   });
 
   it('calls rrweb.record with custom options', async () => {
@@ -126,7 +136,7 @@ describe('Replay', () => {
 
     const initialSession = replay.session;
 
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -146,7 +156,7 @@ describe('Replay', () => {
 
     const initialSession = replay.session;
 
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     window.dispatchEvent(new Event('focus'));
 
@@ -170,7 +180,7 @@ describe('Replay', () => {
     expect(replay).toHaveSameSession(initialSession);
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -194,7 +204,7 @@ describe('Replay', () => {
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     const hiddenBreadcrumb = {
@@ -233,13 +243,13 @@ describe('Replay', () => {
     });
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
 
     replay.addEvent(TEST_EVENT);
     document.dispatchEvent(new Event('visibilitychange'));
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
@@ -277,7 +287,7 @@ describe('Replay', () => {
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
       mockRecord._emitter(TEST_EVENT);
-      jest.advanceTimersByTime(4000);
+      vi.advanceTimersByTime(4000);
     });
 
     // We are at time = +16seconds now (relative to BASE_TIMESTAMP)
@@ -313,7 +323,7 @@ describe('Replay', () => {
     expect(initialSession?.id).toBeDefined();
     // @ts-expect-error private member
     expect(replay.initialState).toEqual({
-      url: 'http://localhost/',
+      url: 'http://localhost:3000/',
       timestamp: BASE_TIMESTAMP,
     });
 
@@ -324,7 +334,7 @@ describe('Replay', () => {
 
     // Idle for 15 minutes
     const FIFTEEN_MINUTES = 15 * 60000;
-    jest.advanceTimersByTime(FIFTEEN_MINUTES);
+    vi.advanceTimersByTime(FIFTEEN_MINUTES);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.
@@ -359,7 +369,7 @@ describe('Replay', () => {
     await advanceTimers(5000);
 
     const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
-    const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+    const breadcrumbTimestamp = newTimestamp;
 
     expect(replay).toHaveSentReplay({
       events: JSON.stringify([
@@ -423,10 +433,8 @@ describe('Replay', () => {
   it('fails to upload data on first two calls and succeeds on the third', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Suppress console.errors
-    jest.spyOn(console, 'error').mockImplementation(jest.fn());
-    const mockConsole = console.error as jest.MockedFunction<
-      typeof console.error
-    >;
+    vi.spyOn(console, 'error').mockImplementation(vi.fn());
+    const mockConsole = console.error as MockedFunction<typeof console.error>;
     // fail the first and second requests and pass the third one
     mockSendReplayRequest.mockImplementationOnce(() => {
       throw new Error('Something bad happened');
@@ -464,7 +472,7 @@ describe('Replay', () => {
         // 20seconds = Add up all of the previous `advanceTimers()`
         timestamp: (BASE_TIMESTAMP + 20000) / 1000,
         trace_ids: [],
-        urls: ['http://localhost/'],
+        urls: ['http://localhost:3000/'],
       }),
       recordingPayloadHeader: { segment_id: 0 },
       events: JSON.stringify([TEST_EVENT]),
@@ -482,12 +490,10 @@ describe('Replay', () => {
 
   it('fails to upload data and hits retry max and stops', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
-    jest.spyOn(replay, 'sendReplay');
+    vi.spyOn(replay, 'sendReplay');
     // Suppress console.errors
-    jest.spyOn(console, 'error').mockImplementation(jest.fn());
-    const mockConsole = console.error as jest.MockedFunction<
-      typeof console.error
-    >;
+    vi.spyOn(console, 'error').mockImplementation(vi.fn());
+    const mockConsole = console.error as MockedFunction<typeof console.error>;
 
     expect(replay.session?.segmentId).toBe(0);
 
@@ -516,7 +522,7 @@ describe('Replay', () => {
     mockConsole.mockReset();
 
     // Make sure it doesn't retry again
-    jest.runAllTimers();
+    vi.runAllTimers();
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(4);
     expect(replay.sendReplay).toHaveBeenCalledTimes(4);
 
@@ -562,7 +568,7 @@ describe('Replay', () => {
 
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
     expect(replay.session?.segmentId).toBe(2);
     expect(replay).toHaveSentReplay({
@@ -599,7 +605,7 @@ describe('Replay', () => {
     expect(replay).toHaveSentReplay({
       replayEventPayload: expect.objectContaining({
         replay_start_timestamp: BASE_TIMESTAMP / 1000,
-        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+        urls: ['http://localhost:3000/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
       }),
     });
   });
@@ -608,10 +614,8 @@ describe('Replay', () => {
   it('does not create replay event if recording upload completely fails', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Suppress console.errors
-    jest.spyOn(console, 'error').mockImplementation(jest.fn());
-    const mockConsole = console.error as jest.MockedFunction<
-      typeof console.error
-    >;
+    vi.spyOn(console, 'error').mockImplementation(vi.fn());
+    const mockConsole = console.error as MockedFunction<typeof console.error>;
     // fail the first and second requests and pass the third one
     mockSendReplayRequest.mockImplementationOnce(() => {
       throw new Error('Something bad happened');
@@ -625,6 +629,7 @@ describe('Replay', () => {
     // Reset console.error mock to minimize the amount of time we are hiding
     // console messages in case an error happens after
     mockConsole.mockClear();
+    vi.advanceTimersToNextTimer();
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
     mockSendReplayRequest.mockImplementationOnce(() => {
@@ -691,14 +696,19 @@ describe('Replay', () => {
     expect(replay).toHaveSentReplay({
       replayEventPayload: expect.objectContaining({
         replay_start_timestamp: (BASE_TIMESTAMP - 10000) / 1000,
-        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+        urls: ['http://localhost:3000/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
       }),
     });
   });
 
   it('does not have stale `replay_start_timestamp`', async function () {
+    const prevPerformance = window.performance;
+    Object.defineProperty(window, 'performance', {
+      value: prevPerformance,
+      writable: true,
+    });
     // @ts-expect-error read-only
-    window.performance.timeOrigin = BASE_TIMESTAMP;
+    // window.performance.timeOrigin = BASE_TIMESTAMP;
     // add a fake/old performance event
     replay.performanceEvents.push(PerformanceEntryResource());
 
@@ -723,7 +733,7 @@ describe('Replay', () => {
     // This event will trigger capturing recording
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
     await new Promise(process.nextTick);
 

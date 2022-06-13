@@ -1,4 +1,6 @@
 // mock functions need to be imported first
+import * as SentryUtils from '@sentry/utils';
+import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import {
   afterAll,
   afterEach,
@@ -6,34 +8,33 @@ import {
   beforeEach,
   expect,
   it,
-  jest,
-} from '@jest/globals';
-import * as SentryUtils from '@sentry/utils';
-import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
+  MockedFunction,
+  vi,
+} from 'vitest';
 
 import { SESSION_IDLE_DURATION } from './session/constants';
 import { createPerformanceEntries } from './createPerformanceEntry';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
-  jest.advanceTimersByTime(time);
+  vi.advanceTimersByTime(time);
   await new Promise(process.nextTick);
 }
 
-type MockSendReplay = jest.MockedFunction<typeof Replay.prototype.sendReplay>;
-type MockAddPerformanceEntries = jest.MockedFunction<
+type MockSendReplay = MockedFunction<typeof Replay.prototype.sendReplay>;
+type MockAddPerformanceEntries = MockedFunction<
   typeof Replay.prototype.addPerformanceEntries
 >;
-type MockAddMemoryEntry = jest.MockedFunction<
+type MockAddMemoryEntry = MockedFunction<
   typeof Replay.prototype.addMemoryEntry
 >;
-type MockEventBufferFinish = jest.MockedFunction<
+type MockEventBufferFinish = MockedFunction<
   Exclude<typeof Replay.prototype.eventBuffer, null>['finish']
 >;
-type MockFlush = jest.MockedFunction<typeof Replay.prototype.flush>;
-type MockRunFlush = jest.MockedFunction<typeof Replay.prototype.runFlush>;
+type MockFlush = MockedFunction<typeof Replay.prototype.flush>;
+type MockRunFlush = MockedFunction<typeof Replay.prototype.runFlush>;
 
 const prevLocation = window.location;
 let domHandler: (args: any) => any;
@@ -49,30 +50,42 @@ let mockAddMemoryEntry: MockAddMemoryEntry;
 let mockAddPerformanceEntries: MockAddPerformanceEntries;
 
 beforeAll(async () => {
-  jest
-    .spyOn(SentryUtils, 'addInstrumentationHandler')
-    .mockImplementation((type, handler: (args: any) => any) => {
-      if (type === 'dom') {
-        domHandler = handler;
-      }
-    });
+  vi.mock('@sentry/utils', async () => {
+    const actual = (await vi.importActual(
+      '@sentry/utils'
+    )) as typeof SentryUtils;
+    return {
+      ...actual,
+      logger: actual.logger,
+      addInstrumentationHandler: vi.fn(),
+    };
+  });
+  (
+    SentryUtils.addInstrumentationHandler as MockedFunction<
+      typeof SentryUtils.addInstrumentationHandler
+    >
+  ).mockImplementation((_type, handler: (args: any) => any) => {
+    if (_type === 'dom') {
+      domHandler = handler;
+    }
+  });
 
   ({ replay } = await mockSdk());
-  jest.spyOn(replay, 'sendReplay');
+  vi.spyOn(replay, 'sendReplay');
   mockSendReplay = replay.sendReplay as MockSendReplay;
   mockSendReplay.mockImplementation(
-    jest.fn(async () => {
+    vi.fn(async () => {
       return true;
     })
   );
 
-  jest.spyOn(replay, 'flush');
+  vi.spyOn(replay, 'flush');
   mockFlush = replay.flush as MockFlush;
 
-  jest.spyOn(replay, 'runFlush');
+  vi.spyOn(replay, 'runFlush');
   mockRunFlush = replay.runFlush as MockRunFlush;
 
-  jest.spyOn(replay, 'addPerformanceEntries');
+  vi.spyOn(replay, 'addPerformanceEntries');
   mockAddPerformanceEntries =
     replay.addPerformanceEntries as MockAddPerformanceEntries;
 
@@ -80,13 +93,13 @@ beforeAll(async () => {
     return [];
   });
 
-  jest.spyOn(replay, 'addMemoryEntry');
+  vi.spyOn(replay, 'addMemoryEntry');
   mockAddMemoryEntry = replay.addMemoryEntry as MockAddMemoryEntry;
 });
 
 beforeEach(() => {
-  jest.runAllTimers();
-  jest.setSystemTime(new Date(BASE_TIMESTAMP));
+  vi.runAllTimers();
+  vi.setSystemTime(new Date(BASE_TIMESTAMP));
   mockSendReplay.mockClear();
   replay.eventBuffer?.destroy();
   mockAddPerformanceEntries.mockClear();
@@ -95,22 +108,20 @@ beforeEach(() => {
   mockAddMemoryEntry.mockClear();
 
   if (replay.eventBuffer) {
-    jest.spyOn(replay.eventBuffer, 'finish');
+    vi.spyOn(replay.eventBuffer, 'finish');
   }
   mockEventBufferFinish = replay.eventBuffer?.finish as MockEventBufferFinish;
   mockEventBufferFinish.mockClear();
 });
 
 afterEach(async () => {
-  jest.runAllTimers();
+  vi.runAllTimers();
   await new Promise(process.nextTick);
-  jest.setSystemTime(new Date(BASE_TIMESTAMP));
+  vi.setSystemTime(new Date(BASE_TIMESTAMP));
   sessionStorage.clear();
   replay.clearSession();
   replay.loadSession({ expiry: SESSION_IDLE_DURATION });
   mockRecord.takeFullSnapshot.mockClear();
-  // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
-  delete window.location;
   Object.defineProperty(window, 'location', {
     value: prevLocation,
     writable: true,
@@ -134,15 +145,15 @@ it('flushes twice after multiple flush() calls)', async () => {
 
   expect(replay.flush).toHaveBeenCalledTimes(4);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
   await new Promise(process.nextTick);
   expect(replay.runFlush).toHaveBeenCalledTimes(1);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
   await new Promise(process.nextTick);
   expect(replay.runFlush).toHaveBeenCalledTimes(2);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
   await new Promise(process.nextTick);
   expect(replay.runFlush).toHaveBeenCalledTimes(2);
 });
@@ -240,7 +251,7 @@ it('long first flush enqueues following events', async () => {
   });
 
   // Make sure there's no other calls
-  jest.runAllTimers();
+  vi.runAllTimers();
   await new Promise(process.nextTick);
   expect(mockSendReplay).toHaveBeenCalledTimes(2);
 });

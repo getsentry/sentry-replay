@@ -1,31 +1,21 @@
-import { beforeAll, expect, it, jest } from '@jest/globals';
 import { getCurrentHub } from '@sentry/core';
 import { mockSdk } from '@test';
+import { beforeAll, expect, it, MockedFunction, vi } from 'vitest';
 
 import * as HandleScope from './handleScope';
 
-let mockHandleScope: jest.MockedFunction<typeof HandleScope.handleScope>;
+let mockHandleScope: MockedFunction<typeof HandleScope.handleScope>;
 
-jest.useFakeTimers();
+vi.useFakeTimers();
 
 beforeAll(async function () {
-  const { replay } = await mockSdk();
-  type MockSendReplayRequest = jest.MockedFunction<
-    typeof replay.sendReplayRequest
-  >;
-  const mockSendReplayRequest =
-    replay.sendReplayRequest as MockSendReplayRequest;
-  mockSendReplayRequest.mockImplementation(
-    jest.fn(async () => {
-      return;
-    })
-  );
-  jest.spyOn(HandleScope, 'handleScope');
-  mockHandleScope = HandleScope.handleScope as jest.MockedFunction<
+  await mockSdk();
+  vi.spyOn(HandleScope, 'handleScope');
+  mockHandleScope = HandleScope.handleScope as MockedFunction<
     typeof HandleScope.handleScope
   >;
 
-  jest.runAllTimers();
+  vi.runAllTimers();
 });
 
 it('returns a breadcrumb only if last breadcrumb has changed (integration)', function () {

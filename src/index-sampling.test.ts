@@ -1,11 +1,11 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { describe, expect, it, vi } from 'vitest';
 
-jest.unmock('@sentry/browser');
+vi.unmock('@sentry/browser');
 
 // mock functions need to be imported first
 import { mockRrweb, mockSdk } from '@test';
 
-jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers({ advanceTimers: true });
 
 describe('Replay (sampling)', () => {
   it('does nothing if not sampled', async () => {
@@ -14,17 +14,17 @@ describe('Replay (sampling)', () => {
       replayOptions: { stickySession: true, replaysSamplingRate: 0.0 },
     });
 
-    jest.spyOn(replay, 'loadSession');
-    jest.spyOn(replay, 'addListeners');
+    vi.spyOn(replay, 'loadSession');
+    vi.spyOn(replay, 'addListeners');
     // @ts-expect-error private
     expect(replay.initialState).toEqual(undefined);
-    jest.runAllTimers();
+    vi.runAllTimers();
 
     expect(replay.session?.sampled).toBe(false);
     // @ts-expect-error private
     expect(replay.initialState).toEqual({
       timestamp: expect.any(Number),
-      url: 'http://localhost/',
+      url: 'http://localhost:3000/',
     });
     expect(mockRecord).not.toHaveBeenCalled();
     expect(replay.addListeners).not.toHaveBeenCalled();

@@ -1,6 +1,8 @@
-jest.unmock('@sentry/browser');
+vi.unmock('@sentry/browser');
 
 // mock functions need to be imported first
+import { captureException } from '@sentry/browser';
+import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import {
   afterAll,
   afterEach,
@@ -9,10 +11,8 @@ import {
   describe,
   expect,
   it,
-  jest,
-} from '@jest/globals';
-import { captureException } from '@sentry/browser';
-import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
+  vi,
+} from 'vitest';
 
 import {
   SESSION_IDLE_DURATION,
@@ -20,10 +20,10 @@ import {
 } from './session/constants';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
-  jest.advanceTimersByTime(time);
+  vi.advanceTimersByTime(time);
   await new Promise(process.nextTick);
 }
 
@@ -32,23 +32,23 @@ describe('Replay (capture only on error)', () => {
   const { record: mockRecord } = mockRrweb();
 
   beforeAll(async () => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     ({ replay } = await mockSdk({
       replayOptions: { captureOnlyOnError: true, stickySession: false },
     }));
-    jest.runAllTimers();
+    vi.runAllTimers();
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     // mockSendReplayRequest.mockClear();
     mockRecord.takeFullSnapshot.mockClear();
   });
 
   afterEach(async () => {
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.clearSession();
     replay.eventBuffer?.destroy();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
@@ -65,10 +65,9 @@ describe('Replay (capture only on error)', () => {
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).not.toHaveSentReplay();
 
-    // TODO: captureException(new Error('testing')) does not trigger addGlobalEventProcessor
-    captureException('testing');
-    jest.runAllTimers();
-    await new Promise(process.nextTick);
+    captureException(new Error('testing'));
+
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
@@ -82,11 +81,11 @@ describe('Replay (capture only on error)', () => {
       },
     });
 
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(replay).not.toHaveSentReplay();
@@ -101,13 +100,13 @@ describe('Replay (capture only on error)', () => {
     });
     document.dispatchEvent(new Event('visibilitychange'));
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(replay).not.toHaveSentReplay();
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 100);
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 100);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -116,7 +115,7 @@ describe('Replay (capture only on error)', () => {
     });
     document.dispatchEvent(new Event('visibilitychange'));
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
@@ -133,14 +132,14 @@ describe('Replay (capture only on error)', () => {
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     replay.addEvent(TEST_EVENT);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
@@ -156,7 +155,7 @@ describe('Replay (capture only on error)', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(replay).not.toHaveSentReplay();
@@ -167,7 +166,7 @@ describe('Replay (capture only on error)', () => {
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
       mockRecord._emitter(TEST_EVENT);
-      jest.advanceTimersByTime(4000);
+      vi.advanceTimersByTime(4000);
     });
 
     // We are at time = +16seconds now (relative to BASE_TIMESTAMP)
@@ -184,14 +183,14 @@ describe('Replay (capture only on error)', () => {
     // Let's make sure it continues to work
     mockRecord._emitter(TEST_EVENT);
     await advanceTimers(5000);
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
     expect(replay).not.toHaveSentReplay();
   });
 
   it('does not upload if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
     // Idle for 15 minutes
-    jest.advanceTimersByTime(15 * 60000);
+    vi.advanceTimersByTime(15 * 60000);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.
@@ -203,7 +202,7 @@ describe('Replay (capture only on error)', () => {
     mockRecord._emitter(TEST_EVENT);
     expect(replay).not.toHaveSentReplay();
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     // Instead of recording the above event, a full snapshot will occur.
@@ -224,12 +223,11 @@ describe('Replay (capture only on error)', () => {
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).not.toHaveSentReplay();
 
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
 
-    // TODO: captureException(new Error('testing')) does not trigger addGlobalEventProcessor
-    captureException('testing');
+    captureException(new Error('testing'));
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     await new Promise(process.nextTick);
 
     expect(replay).toHaveSentReplay({
@@ -238,10 +236,10 @@ describe('Replay (capture only on error)', () => {
         replay_start_timestamp: BASE_TIMESTAMP / 1000,
         // the exception happens roughly 5 seconds after BASE_TIMESTAMP and
         // extra time is likely due to async of `addMemoryEntry()`
-        timestamp: expect.closeTo((BASE_TIMESTAMP + 5000) / 1000, 1),
+        timestamp: (BASE_TIMESTAMP + 5000) / 1000,
         error_ids: [expect.any(String)],
         trace_ids: [],
-        urls: ['http://localhost/'],
+        urls: ['http://localhost:3000/'],
         replay_id: expect.any(String),
       }),
       recordingPayloadHeader: { segment_id: 0 },

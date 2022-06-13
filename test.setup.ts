@@ -1,5 +1,11 @@
-import { afterEach, beforeAll, expect, jest } from '@jest/globals';
-import type { MatcherFunction } from 'expect';
+import {
+  afterEach,
+  beforeAll,
+  expect,
+  MockedFunction,
+  MockedObject,
+  vi,
+} from 'vitest';
 
 import { Session } from './src/session/Session';
 import { Replay } from './src';
@@ -12,11 +18,11 @@ type Fetch = (
   init?: RequestInit | undefined
 ) => Promise<Response>;
 
-type MockFetch = jest.MockedFunction<Fetch>;
+type MockFetch = MockedFunction<Fetch>;
 
 // Not the best fetch mock, but probably good enough - (remove the
 // Headers/Response casts to see unmocked behavior)
-const mockFetch = jest.fn(
+const mockFetch = vi.fn(
   (_input: RequestInfo | URL) =>
     new Promise<Response>((resolve) => {
       resolve({
@@ -43,7 +49,7 @@ beforeAll(() => {
       return;
     }
 
-    jest.spyOn(global, 'fetch');
+    vi.spyOn(global, 'fetch');
     (global.fetch as MockFetch).mockImplementation(mockFetch);
   }
 });
@@ -75,44 +81,38 @@ const ENVELOPE_URL_REGEX = new RegExp(
   'https://ingest.f00.f00/api/1/envelope/\\?sentry_key=dsn&sentry_version=7'
 );
 
-const toHaveSameSession: MatcherFunction<[expected: undefined | Session]> =
-  function (received: jest.Mocked<Replay>, expected: undefined | Session) {
-    const pass = this.equals(received.session?.id, expected?.id) as boolean;
+const toHaveSameSession = function (
+  received: MockedObject<Replay>,
+  expected: undefined | Session
+) {
+  const pass = this.equals(received.session?.id, expected?.id);
 
-    const options = {
-      isNot: this.isNot,
-      promise: this.promise,
-    };
-
-    return {
-      pass,
-      message: () =>
-        this.utils.matcherHint(
-          'toHaveSameSession',
-          undefined,
-          undefined,
-          options
-        ) +
-        '\n\n' +
-        `Expected: ${pass ? 'not ' : ''}${this.utils.printExpected(
-          expected
-        )}\n` +
-        `Received: ${this.utils.printReceived(received.session)}`,
-    };
+  const options = {
+    isNot: this.isNot,
+    promise: this.promise,
   };
+
+  return {
+    pass,
+    message: () =>
+      this.utils.matcherHint(
+        'toHaveSameSession',
+        undefined,
+        undefined,
+        options
+      ) +
+      '\n\n' +
+      `Expected: ${pass ? 'not ' : ''}${this.utils.printExpected(expected)}\n` +
+      `Received: ${this.utils.printReceived(received.session)}`,
+  };
+};
 
 /**
  * Checks the last call to `fetch` and ensures a replay was uploaded by
  * checking the `fetch()` request's body.
  */
-const toHaveSentReplay: MatcherFunction<
-  [
-    expected?:
-      | SentReplayExpected
-      | { sample: SentReplayExpected; inverse: boolean }
-  ]
-> = function (
-  _received: jest.Mocked<Replay>,
+const toHaveSentReplay = function (
+  _received: MockedObject<Replay>,
   expected?:
     | SentReplayExpected
     | { sample: SentReplayExpected; inverse: boolean }
@@ -210,13 +210,21 @@ expect.extend({
   toHaveSentReplay,
 });
 
-declare module 'expect' {
-  interface AsymmetricMatchers {
-    toHaveSentReplay(expected?: SentReplayExpected): void;
-    toHaveSameSession(expected: undefined | Session): void;
-  }
-  interface Matchers<R> {
-    toHaveSentReplay(expected?: SentReplayExpected): R;
-    toHaveSameSession(expected: undefined | Session): R;
+interface MatcherResult {
+  pass: boolean;
+  message: () => string;
+  // If you pass these, they will automatically appear inside a diff,
+  // if the matcher will not pass, so you don't need to print diff yourself
+  actual?: unknown;
+  expected?: unknown;
+}
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Vi {
+    interface Assertion {
+      toHaveSentReplay(expected?: SentReplayExpected): MatcherResult;
+      toHaveSameSession(expected: undefined | Session): MatcherResult;
+    }
   }
 }

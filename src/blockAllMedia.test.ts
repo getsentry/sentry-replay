@@ -1,12 +1,12 @@
-import { beforeEach, expect, it, jest } from '@jest/globals';
 import { mockSdk } from '@test';
+import { beforeEach, expect, it, vi } from 'vitest';
 
 import { Replay } from './';
 
 let replay: Replay;
 
 beforeEach(() => {
-  jest.resetModules();
+  vi.resetModules();
 });
 
 it('sets the correct configuration when `blockAllMedia` is disabled', async () => {
