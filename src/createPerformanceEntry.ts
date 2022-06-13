@@ -100,7 +100,7 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
 
   // Do not capture fetches to Sentry ingestion endpoint
   const { host, protocol } = getCurrentHub()?.getClient()?.getDsn() || {};
-  if (name.startsWith(`${protocol}:${host}`)) {
+  if (name.startsWith(`${protocol}://${host}`)) {
     return null;
   }
 
