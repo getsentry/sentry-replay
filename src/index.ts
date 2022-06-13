@@ -398,13 +398,22 @@ export class SentryReplay implements Integration {
   };
 
   handleWindowUnload = () => {
+    const breadcrumb = createBreadcrumb({
+      category: 'ui.exit',
+      message: '',
+    });
+
     this.addUpdate(() => {
-      this.breadcrumbs.push(
-        createBreadcrumb({
-          category: 'ui.exit',
-          message: '',
-        })
-      );
+      this.eventBuffer.addEvent({
+        type: EventType.Custom,
+        // TODO: We were converting from ms to seconds for breadcrumbs, spans,
+        // but maybe we should just keep them as milliseconds
+        timestamp: breadcrumb.timestamp,
+        data: {
+          tag: 'breadcrumb',
+          payload: breadcrumb,
+        },
+      });
     });
   };
 
