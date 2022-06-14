@@ -26,6 +26,8 @@ import type {
   ReplaySpan,
   ReplayRequest,
   InstrumentationType,
+  SentryReplayPluginOptions,
+  SentryReplayConfiguration,
 } from './types';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
@@ -37,37 +39,6 @@ import createBreadcrumb from './util/createBreadcrumb';
  * Returns true if we want to flush immediately, otherwise continue with normal batching
  */
 type AddUpdateCallback = () => boolean | void;
-
-interface PluginOptions {
-  /**
-   * The amount of time to wait before sending a replay
-   */
-  uploadMinDelay?: number;
-
-  /**
-   * The max amount of time to wait before sending a replay
-   */
-  uploadMaxDelay?: number;
-
-  /**
-   * If false, will create a new session per pageload
-   */
-  stickySession?: boolean;
-
-  /**
-   * Attempt to use compression when web workers are available
-   *
-   * (default is true)
-   */
-  useCompression?: boolean;
-}
-
-interface SentryReplayConfiguration extends PluginOptions {
-  /**
-   * Options for `rrweb.recordsetup
-   */
-  rrwebConfig?: RRWebOptions;
-}
 
 const BASE_RETRY_INTERVAL = 5000;
 const MAX_RETRY_COUNT = 5;
@@ -105,7 +76,7 @@ export class SentryReplay implements Integration {
    */
   readonly rrwebRecordOptions: RRWebOptions;
 
-  readonly options: PluginOptions;
+  readonly options: SentryReplayPluginOptions;
 
   /**
    * setTimeout id used for debouncing sending rrweb attachments
