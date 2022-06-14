@@ -1,6 +1,4 @@
-import { expect } from 'vitest';
-
-import type { RRWebEvent } from '@/types';
+import { expect, MockedObject } from 'vitest';
 
 import { SentryReplay } from '@';
 import { ReplaySession } from '@/session';
@@ -11,7 +9,7 @@ const ATTACHMENTS_URL_REGEX = new RegExp(
 
 expect.extend({
   toHaveSameSession(
-    received: jest.Mocked<SentryReplay>,
+    received: MockedObject<SentryReplay>,
     expected: ReplaySession
   ) {
     const pass = this.equals(received.session.id, expected.id);
@@ -42,7 +40,7 @@ expect.extend({
    * Checks the last call to `sendReplayRequest` and ensures a replay was uploaded
    */
   toHaveSentReplay(
-    received: jest.Mocked<SentryReplay>,
+    received: MockedObject<SentryReplay>,
     expected?: string | Uint8Array
   ) {
     const { calls } = received.sendReplayRequest.mock;
@@ -80,12 +78,21 @@ expect.extend({
   },
 });
 
+interface MatcherResult {
+  pass: boolean;
+  message: () => string;
+  // If you pass these, they will automatically appear inside a diff,
+  // if the matcher will not pass, so you don't need to print diff yourself
+  actual?: unknown;
+  expected?: unknown;
+}
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace jest {
-    interface Matchers<R> {
-      toHaveSentReplay(expected?: string | Uint8Array): CustomMatcherResult;
-      toHaveSameSession(expected: ReplaySession): CustomMatcherResult;
+  namespace Vi {
+    interface Assertion {
+      toHaveSentReplay(expected?: string | Uint8Array): MatcherResult;
+      toHaveSameSession(expected: ReplaySession): MatcherResult;
     }
   }
 }

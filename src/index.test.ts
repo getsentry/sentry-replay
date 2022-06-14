@@ -21,12 +21,10 @@ import {
   VISIBILITY_CHANGE_TIMEOUT,
 } from '@/session/constants';
 
-// jest.useFakeTimers({ advanceTimers: true });
 vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
   vi.advanceTimersByTime(time);
-  await new Promise(process.nextTick);
 }
 
 describe('SentryReplay', () => {
@@ -48,11 +46,13 @@ describe('SentryReplay', () => {
         addInstrumentationHandler: vi.fn(),
       };
     });
-    addInstrumentationHandler.mockImplementation(
-      (_type, handler: (args: any) => any) => {
-        domHandler = handler;
-      }
-    );
+    (
+      addInstrumentationHandler as MockedFunction<
+        typeof addInstrumentationHandler
+      >
+    ).mockImplementation((_type, handler: (args: any) => any) => {
+      domHandler = handler;
+    });
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
     mockSendReplayRequest.mockImplementation(
       vi.fn(async () => {
@@ -149,7 +149,7 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
-  it('uploads a replay event when document becomes hidden', async () => {
+  it.only('uploads a replay event when document becomes hidden', async () => {
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,

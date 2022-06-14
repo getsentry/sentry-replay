@@ -24,8 +24,8 @@
     "src/**/*.ts",
     "test/**/*.ts",
     "rollup.config.ts",
-    "jest.config.ts",
-    "jest.setup.ts"
+    "vitest.config.ts",
+    "test.setup.ts"
   ],
   "exclude": ["node_modules"]
 }
