@@ -1,58 +1,69 @@
-import { it, expect, beforeAll, afterEach, vi } from 'vitest';
+import { it, expect, beforeAll, afterEach, vi, MockedFunction } from 'vitest';
 
 import * as CreateSession from './createSession';
 import * as FetchSession from './fetchSession';
 import * as SaveSession from './saveSession';
 import { updateSessionActivity } from './updateSessionActivity';
 
+vi.spyOn(CreateSession, 'createSession');
+vi.spyOn(FetchSession, 'fetchSession');
+vi.spyOn(SaveSession, 'saveSession');
+
+const mockCreateSession = CreateSession.createSession as MockedFunction<
+  typeof CreateSession.createSession
+>;
+const mockFetchSession = FetchSession.fetchSession as MockedFunction<
+  typeof FetchSession.fetchSession
+>;
+const mockSaveSession = SaveSession.saveSession as MockedFunction<
+  typeof SaveSession.saveSession
+>;
+
 beforeAll(() => {
-  vi.spyOn(CreateSession, 'createSession');
-  vi.spyOn(FetchSession, 'fetchSession');
-  vi.spyOn(SaveSession, 'saveSession');
   window.sessionStorage.clear();
 });
 
 afterEach(() => {
   window.sessionStorage.clear();
-  (CreateSession.createSession as vi.Mock).mockClear();
-  (FetchSession.fetchSession as vi.Mock).mockClear();
-  (SaveSession.saveSession as vi.Mock).mockClear();
+  mockCreateSession.mockClear();
+  mockFetchSession.mockClear();
+  mockSaveSession.mockClear();
 });
 
 it('does nothing if no sticky session', () => {
   updateSessionActivity({ stickySession: false });
 
-  expect(FetchSession.fetchSession).not.toHaveBeenCalled();
-  expect(CreateSession.createSession).not.toHaveBeenCalled();
-  expect(SaveSession.saveSession).not.toHaveBeenCalled();
+  expect(mockFetchSession).not.toHaveBeenCalled();
+  expect(mockCreateSession).not.toHaveBeenCalled();
+  expect(mockSaveSession).not.toHaveBeenCalled();
 });
 
 it('creates a new session if no existing one', () => {
   updateSessionActivity({ stickySession: true });
 
-  expect(FetchSession.fetchSession).toHaveBeenCalled();
-  expect(CreateSession.createSession).toHaveBeenCalled();
-  expect(SaveSession.saveSession).toHaveBeenCalled();
+  expect(mockFetchSession).toHaveBeenCalled();
+  expect(mockCreateSession).toHaveBeenCalled();
+  expect(mockSaveSession).toHaveBeenCalled();
 });
 
 it('updates an existing session', () => {
   const now = new Date().getTime();
   const lastActivity = now - 10000;
-  const saveSession = SaveSession.saveSession as vi.Mock;
 
-  saveSession({
+  mockSaveSession({
     id: 'transaction_id',
     lastActivity,
     started: lastActivity,
+    sequenceId: 0,
   });
   // Clear mock because it will get called again
-  saveSession.mockClear();
+  mockSaveSession.mockClear();
 
   updateSessionActivity({ stickySession: true });
 
-  expect(FetchSession.fetchSession).toHaveBeenCalled();
-  expect(CreateSession.createSession).not.toHaveBeenCalled();
-  expect(saveSession.mock.calls[0][0].lastActivity).toBeGreaterThan(
+  expect(mockFetchSession).toHaveBeenCalled();
+  expect(mockCreateSession).not.toHaveBeenCalled();
+  expect(mockSaveSession.mock.calls[0][0].lastActivity).toBeGreaterThan(
     lastActivity
   );
 });

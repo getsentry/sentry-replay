@@ -13,7 +13,7 @@ import {
   MockedFunction,
 } from 'vitest';
 
-import { addInstrumentationHandler } from '@sentry/utils';
+import * as SentryUtils from '@sentry/utils';
 
 import { SentryReplay } from '@';
 import {
@@ -39,7 +39,9 @@ describe('SentryReplay', () => {
     ({ replay } = mockSdk());
     vi.spyOn(replay, 'sendReplayRequest');
     vi.mock('@sentry/utils', async () => {
-      const actual = await vi.importActual('@sentry/utils');
+      const actual = (await vi.importActual(
+        '@sentry/utils'
+      )) as typeof SentryUtils;
       return {
         ...actual,
         logger: actual.logger,
@@ -47,8 +49,8 @@ describe('SentryReplay', () => {
       };
     });
     (
-      addInstrumentationHandler as MockedFunction<
-        typeof addInstrumentationHandler
+      SentryUtils.addInstrumentationHandler as MockedFunction<
+        typeof SentryUtils.addInstrumentationHandler
       >
     ).mockImplementation((_type, handler: (args: any) => any) => {
       domHandler = handler;

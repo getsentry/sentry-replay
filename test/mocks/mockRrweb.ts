@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi, MockedFunction, SpyInstance } from 'vitest';
 import { BASE_TIMESTAMP } from '@test';
 import { RRWebEvent } from '@/types';
 
@@ -14,12 +14,12 @@ type RecordAdditionalProperties = {
   _emitter: (event: RRWebEvent, ...args: any[]) => void;
 };
 
-export type RecordMock = jest.MockedFunction<typeof rrweb.record> &
+export type RecordMock = MockedFunction<typeof rrweb.record> &
   RecordAdditionalProperties;
 
 vi.mock('rrweb', async () => {
-  const actual = await vi.importActual('rrweb');
-  const mockRecordFn: vi.Mock & Partial<RecordAdditionalProperties> = vi.fn(
+  const actual = (await vi.importActual('rrweb')) as typeof rrweb;
+  const mockRecordFn: SpyInstance & Partial<RecordAdditionalProperties> = vi.fn(
     ({ emit }) => {
       mockRecordFn._emitter = emit;
     }

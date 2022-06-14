@@ -1,13 +1,17 @@
-import { it, expect, vi, beforeAll, afterEach } from 'vitest';
+import { it, expect, vi, beforeAll, afterEach, MockedFunction } from 'vitest';
+
+import * as SentryUtils from '@sentry/utils';
 
 import * as CreateSession from './createSession';
 import * as FetchSession from './fetchSession';
 import { getSession } from './getSession';
 import { saveSession } from './saveSession';
 
-vi.mock('@sentry/utils', () => {
+vi.mock('@sentry/utils', async () => {
+  const actual = (await vi.importActual('@sentry/utils')) as typeof SentryUtils;
   return {
-    ...require('@sentry/utils'),
+    ...actual,
+    logger: actual.logger,
     uuid4: vi.fn(() => 'test_session_id'),
   };
 });
@@ -29,8 +33,16 @@ beforeAll(() => {
 
 afterEach(() => {
   window.sessionStorage.clear();
-  (CreateSession.createSession as vi.Mock).mockClear();
-  (FetchSession.fetchSession as vi.Mock).mockClear();
+  (
+    CreateSession.createSession as MockedFunction<
+      typeof CreateSession.createSession
+    >
+  ).mockClear();
+  (
+    FetchSession.fetchSession as MockedFunction<
+      typeof FetchSession.fetchSession
+    >
+  ).mockClear();
 });
 
 it('creates a non-sticky session when one does not exist', function () {
