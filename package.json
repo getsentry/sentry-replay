@@ -69,7 +69,7 @@
   },
   "volta": {
     "node": "14.19.0",
-    "yarn": "1.22.17"
+    "yarn": "1.22.19"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": "yarn eslint --cache --fix"
