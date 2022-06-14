@@ -32,7 +32,7 @@ jest.mock('rrweb', () => {
       {
         data: { isCheckout },
         timestamp: BASE_TIMESTAMP,
-        type: 2,
+        type: isCheckout ? 2 : 3,
       },
       isCheckout
     );

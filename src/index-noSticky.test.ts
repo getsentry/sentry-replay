@@ -1,9 +1,6 @@
 // mock functions need to be imported first
 import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
 
-import * as Sentry from '@sentry/browser';
-import * as SentryUtils from '@sentry/utils';
-
 import { SentryReplay } from '@';
 import {
   SESSION_IDLE_DURATION,
@@ -27,7 +24,7 @@ describe('SentryReplay (no sticky)', () => {
 
   beforeAll(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    ({ replay } = mockSdk());
+    ({ replay } = mockSdk({ replayOptions: { stickySession: false } }));
     jest.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
     mockSendReplayRequest.mockImplementation(
@@ -41,13 +38,13 @@ describe('SentryReplay (no sticky)', () => {
   beforeEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
+    mockRecord.takeFullSnapshot.mockClear();
   });
 
   afterEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
-    mockRecord.takeFullSnapshot.mockClear();
   });
 
   afterAll(() => {
@@ -206,10 +203,9 @@ describe('SentryReplay (no sticky)', () => {
       type: 3,
     };
     mockRecord._emitter(TEST_EVENT);
+    expect(replay).not.toHaveSentReplay();
 
     await new Promise(process.nextTick);
-
-    expect(replay).not.toHaveSentReplay();
 
     // Instead of recording the above event, a full snapshot will occur.
     //
@@ -217,13 +213,13 @@ describe('SentryReplay (no sticky)', () => {
     // and produce a checkout based on a previous checkout + updates, and then
     // replay the event on top. Or maybe replay the event on top of a refresh
     // snapshot.
-    expect(mockRecord.takeFullSnapshot).toHaveBeenCalledWith(true);
 
     expect(replay).toHaveSentReplay(
       JSON.stringify([
         { data: { isCheckout: true }, timestamp: BASE_TIMESTAMP, type: 2 },
       ])
     );
+    expect(mockRecord.takeFullSnapshot).toHaveBeenCalledWith(true);
 
     // Should be a new session
     expect(replay).not.toHaveSameSession(initialSession);
