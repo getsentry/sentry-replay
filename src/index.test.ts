@@ -149,7 +149,7 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
-  it.only('uploads a replay event when document becomes hidden', async () => {
+  it('uploads a replay event when document becomes hidden', async () => {
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
