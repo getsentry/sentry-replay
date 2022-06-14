@@ -14,7 +14,8 @@
     "prepare": "husky install",
     "prepublishOnly": "yarn build",
     "start:demo": "yarn build && cd demo && yarn start",
-    "test": "yarn jest",
+    "test": "yarn vitest",
+    "test:ci": "yarn vitest --run",
     "watch": "NODE_ENV=development yarn build --watch"
   },
   "files": [

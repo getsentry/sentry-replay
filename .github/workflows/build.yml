@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: yarn install --frozen-lockfile
-      - run: yarn test
+      - run: yarn test:ci
       - run: yarn build
       - run: yarn pack
       - uses: actions/upload-artifact@v2
