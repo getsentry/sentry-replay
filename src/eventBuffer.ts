@@ -2,18 +2,12 @@ import { RRWebEvent, WorkerResponse } from './types';
 import { logger } from './util/logger';
 import workerString from './worker/worker.js';
 
-declare global {
-  interface Window {
-    __SENTRY_USE_ARRAY_BUFFER: boolean;
-  }
-}
-
 interface CreateEventBufferParams {
   useCompression: boolean;
 }
 
 export function createEventBuffer({ useCompression }: CreateEventBufferParams) {
-  if (useCompression && window.Worker && !window.__SENTRY_USE_ARRAY_BUFFER) {
+  if (useCompression && window.Worker) {
     const workerBlob = new Blob([workerString]);
     const workerUrl = URL.createObjectURL(workerBlob);
 
