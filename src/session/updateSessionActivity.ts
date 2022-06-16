@@ -1,6 +1,5 @@
 import { createSession } from './createSession';
 import { fetchSession } from './fetchSession';
-import { saveSession } from './saveSession';
 
 export function updateSessionActivity({
   stickySession,
@@ -18,15 +17,9 @@ export function updateSessionActivity({
   if (!existingSession) {
     // TBD: There was an issue here where sessions weren't saving and this
     // caused lots of transactions to be created
-    return createSession({ stickySession });
+    createSession({ stickySession });
+    return;
   }
 
-  const newSession = {
-    ...existingSession,
-    lastActivity: new Date().getTime(),
-  };
-
-  saveSession(newSession);
-
-  return newSession;
+  existingSession.lastActivity = new Date().getTime();
 }

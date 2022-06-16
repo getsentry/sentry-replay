@@ -1,7 +1,7 @@
 import { REPLAY_SESSION_KEY } from './constants';
-import { ReplaySession } from './types';
+import { Session } from './Session';
 
-export function fetchSession(): ReplaySession | null {
+export function fetchSession(): Session | null {
   const hasSessionStorage = 'sessionStorage' in window;
 
   if (!hasSessionStorage) {
@@ -9,7 +9,10 @@ export function fetchSession(): ReplaySession | null {
   }
 
   try {
-    return JSON.parse(window.sessionStorage.getItem(REPLAY_SESSION_KEY));
+    return new Session(
+      JSON.parse(window.sessionStorage.getItem(REPLAY_SESSION_KEY)),
+      { stickySession: true }
+    );
   } catch {
     return null;
   }
