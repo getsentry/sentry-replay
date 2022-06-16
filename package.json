@@ -61,7 +61,7 @@
     "typescript": "^4.6.2"
   },
   "dependencies": {
-    "@sentry/browser": ">=6.18.2",
+    "@sentry/browser": "7.1.1",
     "@sentry/hub": "^7.0.0",
     "@sentry/utils": "^7.0.0",
     "pako": "^2.0.4",

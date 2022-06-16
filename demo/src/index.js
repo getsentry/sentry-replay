@@ -6,13 +6,17 @@ import * as serviceWorker from './serviceWorker';
 import * as Sentry from '@sentry/browser';
 
 import { SentryReplay } from '@sentry/replay';
+import { BrowserTracing } from '@sentry/tracing'; // Must import second
 
 Sentry.init({
   // org/project: sentry-emerging-tech/replays
-  dsn: 'https://8616b02314c14ca1b499b098e1991eb5@o1176005.ingest.sentry.io/6273278',
+  dsn: 'http://c695ee8814214e3f90bcc13420c0ca3d@127.0.0.1:3001/3',
   environment: 'demo',
   tracesSampleRate: 1.0,
-  integrations: [new SentryReplay({ stickySession: true })],
+  integrations: [
+    new BrowserTracing(),
+    new SentryReplay({ stickySession: true }),
+  ],
 });
 
 ReactDOM.render(<App />, document.getElementById('root'));
