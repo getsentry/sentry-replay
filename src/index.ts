@@ -31,7 +31,9 @@ import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 import { handleDom, handleScope, handleFetch, handleXhr } from './coreHandlers';
 import createBreadcrumb from './util/createBreadcrumb';
-
+import { getEnvelopeEndpointWithUrlEncodedAuth } from '@sentry/core';
+import { createEnvelope, serializeEnvelope } from '@sentry/utils';
+// import {test} from '@sentry/browser'
 /**
  * Returns true if we want to flush immediately, otherwise continue with normal batching
  */
@@ -190,6 +192,8 @@ export class SentryReplay implements Integration {
     record({
       ...this.rrwebRecordOptions,
       emit: (event: RRWebEvent, isCheckout?: boolean) => {
+        this.session.sequenceId = 5;
+        console.log('s', ++this.session.sequenceId);
         // If this is false, it means session is expired, create and a new session and wait for checkout
         if (!this.checkAndHandleExpiredSession()) {
           logger.error(
@@ -198,6 +202,8 @@ export class SentryReplay implements Integration {
 
           return;
         }
+
+        console.log('??', this.session.sequenceId);
 
         this.addUpdate(() => {
           // We need to clear existing events on a checkout, otherwise they are
@@ -233,7 +239,7 @@ export class SentryReplay implements Integration {
    */
   addUpdate(cb?: AddUpdateCallback) {
     const now = new Date().getTime();
-
+    console.log('au', this.session.sequenceId);
     // Timestamp of the first replay event since the last flush, this gets
     // reset when we finish the replay event
     if (!this.initialEventTimestampSinceFlush) {
@@ -358,7 +364,7 @@ export class SentryReplay implements Integration {
    */
   handleVisibilityChange = () => {
     const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
-
+    console.log('hv', this.session.sequenceId);
     if (isExpired) {
       if (document.visibilityState === 'visible') {
         // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
@@ -538,13 +544,18 @@ export class SentryReplay implements Integration {
       return;
     }
     // TEMP: keep sending a replay event just for the duration
+    console.log('t', this.session.sequenceId);
     captureEvent({
       message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
+      // @ts-expect-error replay_event is a new event type
+      type: 'replay_event',
+      replay_id: this.session.id,
+      sequence_id: ++this.session.sequenceId,
       tags: {
         replayId: this.session.id,
-        sequenceId: this.session.sequenceId++,
       },
     });
+    console.log(this.session.sequenceId);
 
     this.addPerformanceEntries();
     this.sendReplay(this.session.id);
@@ -575,19 +586,33 @@ export class SentryReplay implements Integration {
       replaySpans: replaySpans,
       breadcrumbs: breadcrumbs,
     });
-    const formData = new FormData();
-    formData.append(
-      'rrweb',
-      new Blob([stringifiedPayload], {
-        type: 'application/json',
-      }),
-      `rrweb-${new Date().getTime()}.json`
+
+    const b = new Blob([stringifiedPayload]);
+    const e = createEnvelope(
+      {
+        event_id: this.session.id,
+        sent_at: '2022-06-08T22:42:54.477Z',
+        sdk: { name: 'sentry.javascript.browser', version: '7.1.1' },
+      },
+      [
+        [
+          {
+            //@ts-expect-error setting enveopo
+            type: 'replay_recording',
+            // length: b.size,
+            // filename: 'replay_recording',
+            // content_type: 'uncompressed',
+          },
+          //@ts-expect-error setting enveopo
+          [stringifiedPayload],
+        ],
+      ]
     );
 
-    // If sendBeacon is supported and payload is smol enough...
+    // If sendBeacon is   supported and payload is smol enough...
     if (this.hasSendBeacon() && stringifiedPayload.length <= 65536) {
       logger.log(`uploading attachment via sendBeacon()`);
-      window.navigator.sendBeacon(endpoint, formData);
+      window.navigator.sendBeacon(endpoint, serializeEnvelope(e));
       return;
     }
 
@@ -595,7 +620,7 @@ export class SentryReplay implements Integration {
     logger.log(`uploading attachment via fetch()`);
     await fetch(endpoint, {
       method: 'POST',
-      body: formData,
+      body: serializeEnvelope(e),
     });
   }
 
@@ -628,10 +653,7 @@ export class SentryReplay implements Integration {
     this.events = [];
 
     const client = Sentry.getCurrentHub().getClient();
-    const endpoint = SentryReplay.attachmentUrlFromDsn(
-      client.getDsn(),
-      eventId
-    );
+    const endpoint = getEnvelopeEndpointWithUrlEncodedAuth(client.getDsn());
 
     try {
       await this.sendReplayRequest({

@@ -32,7 +32,10 @@ export function createSession({
   hub.captureEvent(
     {
       message: ROOT_REPLAY_NAME,
-      tags: { sequenceId: session.sequenceId },
+      replay_id: session.id,
+      sequence_id: session.sequenceId,
+      // @ts-expect-error replay_event is a new event type
+      type: 'replay_event',
     },
     { event_id: session.id }
   );
