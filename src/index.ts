@@ -18,7 +18,6 @@ import {
   VISIBILITY_CHANGE_TIMEOUT,
 } from './session/constants';
 import { getSession } from './session/getSession';
-import { updateSessionActivity } from './session/updateSessionActivity';
 import type {
   RRWebEvent,
   RRWebOptions,
@@ -346,10 +345,7 @@ export class SentryReplay implements Integration {
     // Update with current timestamp as the last session activity
     // Only updating session on visibility change to be conservative about
     // writing to session storage. This could be changed in the future.
-
-    updateSessionActivity({
-      stickySession: this.options.stickySession,
-    });
+    this.session.lastActivity = new Date().getTime();
 
     // Send replay when the page/tab becomes hidden. There is no reason to send
     // replay if it becomes visible, since no actions we care about were done
