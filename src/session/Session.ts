@@ -98,6 +98,6 @@ export class Session {
       started: this.started,
       lastActivity: this.lastActivity,
       sequenceId: this._sequenceId,
-    };
+    } as SessionObject;
   }
 }

@@ -15,7 +15,7 @@ jest.mock('@sentry/utils', () => {
   };
 });
 
-beforeAll(() => {
+beforeEach(() => {
   window.sessionStorage.clear();
 });
 
