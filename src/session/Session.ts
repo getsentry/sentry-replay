@@ -1,7 +1,7 @@
 import { uuid4 } from '@sentry/utils';
 import { saveSession } from './saveSession';
 
-export interface SessionObject {
+interface SessionObject {
   id: string;
 
   /**
