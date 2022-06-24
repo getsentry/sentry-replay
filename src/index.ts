@@ -541,34 +541,31 @@ export class SentryReplay implements Integration {
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
   async sendReplayRequest({ endpoint, events }: ReplayRequest) {
-    const payload = [events];
-
-    const b = new Blob(payload);
-    const e = createEnvelope(
+    // const payload = [events];
+    const envelope = createEnvelope(
       {
         event_id: this.session.id,
-        sent_at: '2022-06-08T22:42:54.477Z',
-        sdk: { name: 'sentry.javascript.browser', version: '7.1.1' },
+        sent_at: new Date().toISOString(),
+        sdk: { name: 'sentry.javascript.integration.replay', version: '1.0.0' },
       },
       [
         [
           {
             //@ts-expect-error setting envelope
             type: 'replay_recording',
-            // length: b.size,
+            length: events.length,
             // filename: 'replay_recording',
             // content_type: 'uncompressed',
           },
-          //@ts-expect-error setting envelope
-          payload,
+          events,
         ],
       ]
     );
 
-    // If sendBeacon is  supported and payload is smol enough...
-    if (this.hasSendBeacon() && stringifiedPayload.length <= 65536) {
+    // If sendBeacon is supported and payload is smol enough...
+    if (this.hasSendBeacon() && events.length <= 65536) {
       logger.log(`uploading attachment via sendBeacon()`);
-      window.navigator.sendBeacon(endpoint, serializeEnvelope(e));
+      window.navigator.sendBeacon(endpoint, serializeEnvelope(envelope));
       return;
     }
 
@@ -576,7 +573,7 @@ export class SentryReplay implements Integration {
     logger.log(`uploading attachment via fetch()`);
     await fetch(endpoint, {
       method: 'POST',
-      body: serializeEnvelope(e),
+      body: serializeEnvelope(envelope),
     });
   }
 
