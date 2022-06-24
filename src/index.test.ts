@@ -24,6 +24,9 @@ describe('SentryReplay', () => {
   let mockSendReplayRequest: MockSendReplayRequest;
   let domHandler: (args: any) => any;
   const { record: mockRecord } = mockRrweb();
+  const envelopeRegex = new RegExp(
+    'https://ingest.f00.f00/api/1/envelope/\\?sentry_key=dsn&sentry_version=7'
+  );
 
   beforeAll(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
@@ -147,12 +150,9 @@ describe('SentryReplay', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await new Promise(process.nextTick);
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalledWith({
-      endpoint: expect.stringMatching(regex),
+      endpoint: expect.stringMatching(envelopeRegex),
       events: JSON.stringify([TEST_EVENT]),
     });
     // Session's last activity should be updated
@@ -170,13 +170,9 @@ describe('SentryReplay', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
-
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
     expect(replay.sendReplayRequest).toHaveBeenCalledWith({
-      endpoint: expect.stringMatching(regex),
+      endpoint: expect.stringMatching(envelopeRegex),
       events: JSON.stringify([TEST_EVENT]),
     });
 
