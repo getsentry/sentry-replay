@@ -1,8 +1,7 @@
 import { logger } from '@/util/logger';
 import { saveSession } from './saveSession';
-import { ROOT_REPLAY_NAME } from './constants';
-import { getCurrentHub } from '@sentry/browser';
 import { Session } from './Session';
+import { captureReplay } from '@/api/captureReplay';
 
 interface CreateSessionParams {
   /**
@@ -19,20 +18,8 @@ interface CreateSessionParams {
 export function createSession({
   stickySession = false,
 }: CreateSessionParams): Session {
-  const hub = getCurrentHub();
-
   const session = new Session(undefined, { stickySession });
-
-  hub.captureEvent(
-    {
-      message: ROOT_REPLAY_NAME,
-      replay_id: session.id,
-      sequence_id: session.sequenceId,
-      // @ts-expect-error replay_event is a new event type
-      type: 'replay_event',
-    },
-    { event_id: session.id }
-  );
+  captureReplay(session);
 
   logger.log(`Creating new session: ${session.id}`);
 

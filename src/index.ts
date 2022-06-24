@@ -1,5 +1,4 @@
 import * as Sentry from '@sentry/browser';
-import { captureEvent } from '@sentry/browser';
 import { addInstrumentationHandler, uuid4 } from '@sentry/utils';
 import { DsnComponents, Event, Integration, Breadcrumb } from '@sentry/types';
 
@@ -36,6 +35,7 @@ import { Session } from './session/Session';
 
 import { getEnvelopeEndpointWithUrlEncodedAuth } from '@sentry/core';
 import { createEnvelope, serializeEnvelope } from '@sentry/utils';
+import { captureReplayUpdate } from './api/captureReplayUpdate';
 
 /**
  * Returns true if we want to flush immediately, otherwise continue with normal batching
@@ -97,15 +97,6 @@ export class SentryReplay implements Integration {
   private retryInterval = BASE_RETRY_INTERVAL;
 
   session: Session | undefined;
-
-  static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
-    const { host, projectId, protocol, publicKey } = dsn;
-
-    const port = dsn.port !== '' ? `:${dsn.port}` : '';
-    const path = dsn.path !== '' ? `/${dsn.path}` : '';
-
-    return `${protocol}://${host}${port}${path}/api/${projectId}/events/${eventId}/attachments/?sentry_key=${publicKey}&sentry_version=7&sentry_client=replay`;
-  }
 
   constructor({
     uploadMinDelay = 5000,
@@ -169,8 +160,6 @@ export class SentryReplay implements Integration {
     record({
       ...this.rrwebRecordOptions,
       emit: (event: RRWebEvent, isCheckout?: boolean) => {
-        this.session.sequenceId = 5;
-        console.log('s', ++this.session.sequenceId);
         // If this is false, it means session is expired, create and a new session and wait for checkout
         if (!this.checkAndHandleExpiredSession()) {
           logger.error(
@@ -179,8 +168,6 @@ export class SentryReplay implements Integration {
 
           return;
         }
-
-        console.log('??', this.session.sequenceId);
 
         this.addUpdate(() => {
           // We need to clear existing events on a checkout, otherwise they are
@@ -212,7 +199,6 @@ export class SentryReplay implements Integration {
    */
   addUpdate(cb?: AddUpdateCallback) {
     const now = new Date().getTime();
-    console.log('au', this.session.sequenceId);
     // Timestamp of the first replay event since the last flush, this gets
     // reset when we finish the replay event
     if (!this.initialEventTimestampSinceFlush) {
@@ -533,17 +519,7 @@ export class SentryReplay implements Integration {
       return;
     }
     // TEMP: keep sending a replay event just for the duration
-    captureEvent({
-      message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
-      // @ts-expect-error replay_event is a new event type
-      type: 'replay_event',
-      replay_id: this.session.id,
-      sequence_id: ++this.session.sequenceId,
-      tags: {
-        replayId: this.session.id,
-      },
-    });
-    console.log(this.session.sequenceId);
+    captureReplayUpdate(this.session);
 
     this.addPerformanceEntries();
     const recordingData = await this.eventBuffer.finish();
@@ -564,10 +540,7 @@ export class SentryReplay implements Integration {
   /**
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
-  async sendReplayRequest({
-    endpoint,
-    events,
-  }: ReplayRequest) {
+  async sendReplayRequest({ endpoint, events }: ReplayRequest) {
     const payload = [events];
 
     const b = new Blob(payload);
@@ -587,7 +560,7 @@ export class SentryReplay implements Integration {
             // content_type: 'uncompressed',
           },
           //@ts-expect-error setting envelope
-              payload
+          payload,
         ],
       ]
     );
