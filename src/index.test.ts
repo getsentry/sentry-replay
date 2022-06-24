@@ -142,11 +142,11 @@ describe('SentryReplay', () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     const hiddenBreadcrumb = {
       type: 5,
-      timestamp: 1580619605,
+      timestamp: 1580601605,
       data: {
         tag: 'breadcrumb',
         payload: {
-          timestamp: 1580619605,
+          timestamp: 1580601605,
           type: 'default',
           category: 'ui.hidden',
           message: 'Page hidden',

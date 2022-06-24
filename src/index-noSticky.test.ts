@@ -113,11 +113,11 @@ describe('SentryReplay (no sticky)', () => {
     replay.eventBuffer.addEvent(TEST_EVENT);
     const hiddenBreadcrumb = {
       type: 5,
-      timestamp: 1580619605,
+      timestamp: 1580601605,
       data: {
         tag: 'breadcrumb',
         payload: {
-          timestamp: 1580619605,
+          timestamp: 1580601605,
           type: 'default',
           category: 'ui.hidden',
           message: 'Page hidden',
