@@ -323,16 +323,30 @@ export class SentryReplay implements Integration {
    * Handle when visibility of the page changes. (e.g. new tab is opened)
    */
   handleVisibilityChange = () => {
-    const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
+    const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
+    const { visibilityState } = document;
+
+    const breadcrumb = createBreadcrumb({
+      category: `ui.${visibilityState}`,
+      message: `Page ${visibilityState === 'visible' ? 'visible' : 'hidden'}`,
+    });
+
     if (isExpired) {
-      if (document.visibilityState === 'visible') {
+      if (visibilityState === 'visible') {
         // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
         // ms, we will re-use the existing session, otherwise create a new
         // session
         logger.log('Document has become active, but session has expired');
-        this.loadSession({ expiry: VISIBILITY_CHANGE_TIMEOUT });
+        this.loadSession({ expiry: SESSION_IDLE_DURATION });
         this.triggerFullSnapshot();
+        breadcrumb.timestamp = new Date().getTime() / 1000;
+      } else {
+        // Somehow the page went hidden while session is expired, attach to previous session
+        breadcrumb.timestamp = this.session.lastActivity / 1000;
       }
+
+      this.createCustomBreadcrumb(breadcrumb);
+
       // We definitely want to return if visibilityState is "visible", and I
       // think we also want to do the same when "hidden", as there shouldn't be
       // any action to take if user has gone idle for a long period and then
@@ -341,38 +355,30 @@ export class SentryReplay implements Integration {
       // the tab.
       return;
     }
+
     // Otherwise if session is not expired...
     // Update with current timestamp as the last session activity
     // Only updating session on visibility change to be conservative about
     // writing to session storage. This could be changed in the future.
     this.session.lastActivity = new Date().getTime();
 
+    this.createCustomBreadcrumb(breadcrumb);
+
     // Send replay when the page/tab becomes hidden. There is no reason to send
     // replay if it becomes visible, since no actions we care about were done
     // while it was hidden
-    if (document.visibilityState !== 'visible') {
+    if (visibilityState !== 'visible') {
       this.flushUpdate();
     }
   };
 
   handleWindowUnload = () => {
-    const breadcrumb = createBreadcrumb({
-      category: 'ui.exit',
-      message: '',
-    });
-
-    this.addUpdate(() => {
-      this.eventBuffer.addEvent({
-        type: EventType.Custom,
-        // TODO: We were converting from ms to seconds for breadcrumbs, spans,
-        // but maybe we should just keep them as milliseconds
-        timestamp: breadcrumb.timestamp,
-        data: {
-          tag: 'breadcrumb',
-          payload: breadcrumb,
-        },
-      });
-    });
+    this.createCustomBreadcrumb(
+      createBreadcrumb({
+        category: 'ui.exit',
+        message: '',
+      })
+    );
   };
 
   handleCoreListener = (type: InstrumentationType) => (handlerData: any) => {
@@ -440,6 +446,19 @@ export class SentryReplay implements Integration {
   triggerFullSnapshot() {
     logger.log('Taking full rrweb snapshot');
     record.takeFullSnapshot(true);
+  }
+
+  createCustomBreadcrumb(breadcrumb: Breadcrumb) {
+    this.addUpdate(() => {
+      this.eventBuffer.addEvent({
+        type: EventType.Custom,
+        timestamp: breadcrumb.timestamp,
+        data: {
+          tag: 'breadcrumb',
+          payload: breadcrumb,
+        },
+      });
+    });
   }
 
   /**

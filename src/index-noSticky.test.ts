@@ -2,10 +2,7 @@
 import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
 
 import { SentryReplay } from '@';
-import {
-  SESSION_IDLE_DURATION,
-  VISIBILITY_CHANGE_TIMEOUT,
-} from '@/session/constants';
+import { SESSION_IDLE_DURATION } from '@/session/constants';
 
 jest.useFakeTimers({ advanceTimers: true });
 
@@ -51,7 +48,7 @@ describe('SentryReplay (no sticky)', () => {
     replay && replay.destroy();
   });
 
-  it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+  it('creates a new session and triggers a full dom snapshot when document becomes visible after [SESSION_IDLE_DURATION]ms', () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -61,7 +58,7 @@ describe('SentryReplay (no sticky)', () => {
 
     const initialSession = replay.session;
 
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+    jest.advanceTimersByTime(SESSION_IDLE_DURATION + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -84,8 +81,8 @@ describe('SentryReplay (no sticky)', () => {
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).toHaveSameSession(initialSession);
 
-    // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    // User comes back before `SESSION_IDLE_DURATION` elapses
+    jest.advanceTimersByTime(SESSION_IDLE_DURATION - 1);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -114,6 +111,19 @@ describe('SentryReplay (no sticky)', () => {
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     replay.eventBuffer.addEvent(TEST_EVENT);
+    const hiddenBreadcrumb = {
+      type: 5,
+      timestamp: 1580619605,
+      data: {
+        tag: 'breadcrumb',
+        payload: {
+          timestamp: 1580619605,
+          type: 'default',
+          category: 'ui.hidden',
+          message: 'Page hidden',
+        },
+      },
+    };
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -121,7 +131,9 @@ describe('SentryReplay (no sticky)', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    expect(replay).toHaveSentReplay(
+      JSON.stringify([TEST_EVENT, hiddenBreadcrumb])
+    );
 
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
