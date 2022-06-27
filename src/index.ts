@@ -327,8 +327,7 @@ export class SentryReplay implements Integration {
     const { visibilityState } = document;
 
     const breadcrumb = createBreadcrumb({
-      category: `ui.${visibilityState}`,
-      message: `Page ${visibilityState === 'visible' ? 'visible' : 'hidden'}`,
+      category: `ui.${visibilityState === 'visible' ? 'focus' : 'blur'}`,
     });
 
     if (isExpired) {

@@ -148,8 +148,7 @@ describe('SentryReplay', () => {
         payload: {
           timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
           type: 'default',
-          category: 'ui.hidden',
-          message: 'Page hidden',
+          category: 'ui.blur',
         },
       },
     };
