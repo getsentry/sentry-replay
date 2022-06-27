@@ -1,5 +1,5 @@
 import { ReplaySpan } from '@/types';
-import { getCurrentHub } from '@sentry/browser';
+import { isIngestHost } from '@/util/isIngestHost';
 
 export function handleFetch(handlerData: any): ReplaySpan {
   if (!handlerData.endTimestamp) {
@@ -7,6 +7,11 @@ export function handleFetch(handlerData: any): ReplaySpan {
   }
 
   const [op, description] = handlerData.args;
+
+  // Ignore requests to Sentry's backend
+  if (isIngestHost(description)) {
+    return null;
+  }
 
   return {
     description,

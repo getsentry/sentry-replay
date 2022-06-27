@@ -1,4 +1,5 @@
 import { ReplaySpan } from '@/types';
+import { isIngestHost } from '@/util/isIngestHost';
 
 export function handleXhr(handlerData: any): ReplaySpan {
   if (handlerData.startTimestamp) {
@@ -9,9 +10,16 @@ export function handleXhr(handlerData: any): ReplaySpan {
     return null;
   }
 
+  const [op, description] = handlerData.args;
+
+  // Ignore requests to Sentry's backend
+  if (isIngestHost(description)) {
+    return null;
+  }
+
   return {
-    description: handlerData.args[1],
-    op: handlerData.args[0],
+    description,
+    op,
     startTimestamp:
       handlerData.xhr.__sentry_xhr__.startTimestamp / 1000 ||
       handlerData.endTimestamp / 1000.0,
