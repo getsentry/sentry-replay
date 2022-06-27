@@ -119,7 +119,8 @@ describe('SentryReplay (no sticky)', () => {
         payload: {
           timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
           type: 'default',
-          category: 'ui.blur',
+          category: 'ui.change_visibility',
+          message: 'Page is hidden',
         },
       },
     };

@@ -99,6 +99,26 @@ describe('SentryReplay', () => {
     expect(replay).not.toHaveSameSession(initialSession);
   });
 
+  it('creates a new session and triggers a full dom snapshot when document becomes active after [SESSION_IDLE_DURATION]ms', () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'visible';
+      },
+    });
+
+    const initialSession = replay.session;
+
+    jest.advanceTimersByTime(SESSION_IDLE_DURATION + 1);
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(mockRecord.takeFullSnapshot).toHaveBeenLastCalledWith(true);
+
+    // Should have created a new session
+    expect(replay).not.toHaveSameSession(initialSession);
+  });
+
   it('does not create a new session if user hides the tab and comes back within 60 seconds', () => {
     const initialSession = replay.session;
 
@@ -127,6 +147,52 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
+  it('uploads a replay event when window is blurred', async () => {
+    mockRecord.takeFullSnapshot.mockClear();
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'hidden';
+      },
+    });
+
+    // Pretend 5 seconds have passed
+    const ELAPSED = 5000;
+    jest.advanceTimersByTime(ELAPSED);
+
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    const hiddenBreadcrumb = {
+      type: 5,
+      timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
+      data: {
+        tag: 'breadcrumb',
+        payload: {
+          timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
+          type: 'default',
+          category: 'ui.blur',
+          message: 'Page is hidden',
+        },
+      },
+    };
+
+    replay.eventBuffer.addEvent(TEST_EVENT);
+    window.dispatchEvent(new Event('blur'));
+    await new Promise(process.nextTick);
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    const regex = new RegExp(
+      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
+    );
+    expect(replay.sendReplayRequest).toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
+      endpoint: expect.stringMatching(regex),
+      events: JSON.stringify([TEST_EVENT, hiddenBreadcrumb]),
+    });
+    // Session's last activity should be updated
+    expect(replay.session.lastActivity).toBeGreaterThan(BASE_TIMESTAMP);
+    // events array should be empty
+    expect(replay.eventBuffer.length).toBe(0);
+  });
+
   it('uploads a replay event when document becomes hidden', async () => {
     mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
@@ -148,7 +214,8 @@ describe('SentryReplay', () => {
         payload: {
           timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
           type: 'default',
-          category: 'ui.blur',
+          category: 'ui.change_visibility',
+          message: 'Page is hidden',
         },
       },
     };
@@ -167,7 +234,7 @@ describe('SentryReplay', () => {
     });
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBeGreaterThan(BASE_TIMESTAMP);
-    // // events array should be empty
+    // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
   });
 
