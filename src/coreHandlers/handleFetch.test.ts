@@ -27,16 +27,3 @@ it('ignores fetches that have not completed yet', function () {
     },
   });
 });
-
-it('ignores sdks own requests', function () {
-  const data = {
-    args: ['resource.fetch', 'https://ingest.f00.f00/envelope/etc/'],
-    startTimestamp: 10000,
-    endTimestamp: 15000,
-    response: {
-      status: 200,
-    },
-  };
-
-  expect(handleFetch(data)).toEqual(null);
-});
