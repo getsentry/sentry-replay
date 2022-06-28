@@ -7,7 +7,7 @@ beforeAll(function () {
   mockSdk();
 });
 
-it('ignores fetches that have not completed yet', function () {
+it('formats fetch calls from core SDK to replay breadcrumbs', function () {
   const data = {
     args: ['resource.fetch', 'https://foo.bar'],
     startTimestamp: 10000,
@@ -26,4 +26,16 @@ it('ignores fetches that have not completed yet', function () {
       statusCode: 200,
     },
   });
+});
+
+it('ignores fetches that have not completed yet', function () {
+  const data = {
+    args: ['resource.fetch', 'https://foo.bar'],
+    startTimestamp: 10000,
+    response: {
+      status: 200,
+    },
+  };
+
+  expect(handleFetch(data)).toEqual(null);
 });
