@@ -328,8 +328,10 @@ export class SentryReplay implements Integration {
    */
   handleVisibilityChange = () => {
     const breadcrumb = createBreadcrumb({
-      category: 'ui.change_visibility',
-      message: `Page is ${document.visibilityState}`,
+      category: 'ui.other',
+      data: {
+        label: `Page is ${document.visibilityState}`,
+      },
     });
 
     if (document.visibilityState === 'visible') {
@@ -345,10 +347,6 @@ export class SentryReplay implements Integration {
   handleWindowBlur = () => {
     const breadcrumb = createBreadcrumb({
       category: 'ui.blur',
-      // Not all blurs will result in `document.visibilityState` being hidden.
-      // e.g. opening a new window, but new window does not completely overlap
-      // previous window
-      message: `Page is ${document.visibilityState}`,
     });
 
     this.doChangeToBackgroundTasks(breadcrumb);
@@ -360,8 +358,6 @@ export class SentryReplay implements Integration {
   handleWindowFocus = () => {
     const breadcrumb = createBreadcrumb({
       category: 'ui.focus',
-      // TODO: Focus should mean that `document.visibilityState` == 'visible'
-      message: `Page is ${document.visibilityState}`,
     });
 
     this.doChangeToForegroundTasks(breadcrumb);
@@ -371,7 +367,6 @@ export class SentryReplay implements Integration {
     this.createCustomBreadcrumb(
       createBreadcrumb({
         category: 'ui.exit',
-        message: '',
       })
     );
   };
