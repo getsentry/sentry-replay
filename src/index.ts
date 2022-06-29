@@ -15,6 +15,7 @@ import {
   REPLAY_EVENT_NAME,
   ROOT_REPLAY_NAME,
   SESSION_IDLE_DURATION,
+  VISIBILITY_CHANGE_TIMEOUT,
 } from './session/constants';
 import { getSession } from './session/getSession';
 import type {
@@ -438,7 +439,7 @@ export class SentryReplay implements Integration {
    * Tasks to run when we consider a page to be hidden (via blurring and/or visibility)
    */
   doChangeToBackgroundTasks(breadcrumb: Breadcrumb) {
-    const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
+    const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
 
     // We check current state to make sure that we do nothing if the page is already inactive
     if (!this.isActive) {
@@ -465,7 +466,7 @@ export class SentryReplay implements Integration {
    * Tasks to run when we consider a page to be visible (via focus and/or visibility)
    */
   doChangeToForegroundTasks(breadcrumb: Breadcrumb) {
-    const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
+    const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
 
     this.isActive = true;
 
@@ -475,11 +476,11 @@ export class SentryReplay implements Integration {
     });
 
     if (isExpired) {
-      // If the user has come back to the page within SESSION_IDLE_DURATION
+      // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
       // ms, we will re-use the existing session, otherwise create a new
       // session
       logger.log('Document has become active, but session has expired');
-      this.loadSession({ expiry: SESSION_IDLE_DURATION });
+      this.loadSession({ expiry: VISIBILITY_CHANGE_TIMEOUT });
       this.triggerFullSnapshot();
       return;
     }

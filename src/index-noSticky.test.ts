@@ -2,7 +2,10 @@
 import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
 
 import { SentryReplay } from '@';
-import { SESSION_IDLE_DURATION } from '@/session/constants';
+import {
+  SESSION_IDLE_DURATION,
+  VISIBILITY_CHANGE_TIMEOUT,
+} from '@/session/constants';
 
 jest.useFakeTimers({ advanceTimers: true });
 
@@ -48,7 +51,7 @@ describe('SentryReplay (no sticky)', () => {
     replay && replay.destroy();
   });
 
-  it('creates a new session and triggers a full dom snapshot when document becomes visible after [SESSION_IDLE_DURATION]ms', () => {
+  it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -58,7 +61,7 @@ describe('SentryReplay (no sticky)', () => {
 
     const initialSession = replay.session;
 
-    jest.advanceTimersByTime(SESSION_IDLE_DURATION + 1);
+    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
 
@@ -68,7 +71,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay).not.toHaveSameSession(initialSession);
   });
 
-  it('does not create a new session if user hides the tab and comes back within 60 seconds', () => {
+  it('does not create a new session if user hides the tab and comes back within [VISIBILITY_CHANGE_TIMEOUT] seconds', () => {
     const initialSession = replay.session;
 
     Object.defineProperty(document, 'visibilityState', {
@@ -81,8 +84,8 @@ describe('SentryReplay (no sticky)', () => {
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).toHaveSameSession(initialSession);
 
-    // User comes back before `SESSION_IDLE_DURATION` elapses
-    jest.advanceTimersByTime(SESSION_IDLE_DURATION - 1);
+    // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
+    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
