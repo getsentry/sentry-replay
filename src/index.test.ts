@@ -190,6 +190,9 @@ describe('SentryReplay', () => {
     expect(replay.session.lastActivity).toBeGreaterThan(BASE_TIMESTAMP);
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
+
+    // Need to reset state to be focused
+    window.dispatchEvent(new Event('focus'));
   });
 
   it('uploads a replay event when document becomes hidden', async () => {

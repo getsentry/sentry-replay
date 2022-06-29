@@ -92,6 +92,11 @@ export class SentryReplay implements Integration {
   private retryCount = 0;
   private retryInterval = BASE_RETRY_INTERVAL;
 
+  /**
+   * If current browser window in an active state
+   */
+  private isActive = true;
+
   session: Session | undefined;
 
   static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
@@ -435,13 +440,19 @@ export class SentryReplay implements Integration {
   doChangeToBackgroundTasks(breadcrumb: Breadcrumb) {
     const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
 
-    this.createCustomBreadcrumb({
-      ...breadcrumb,
-      // if somehow the page went hidden while session is expired, attach to previous session
-      timestamp: isExpired
-        ? this.session.lastActivity / 1000
-        : breadcrumb.timestamp,
-    });
+    // We check current state to make sure that we do not create breadcrumbs
+    // for both page content being hidden *and* window blur
+    if (this.isActive) {
+      this.createCustomBreadcrumb({
+        ...breadcrumb,
+        // if somehow the page went hidden while session is expired, attach to previous session
+        timestamp: isExpired
+          ? this.session.lastActivity / 1000
+          : breadcrumb.timestamp,
+      });
+
+      this.isActive = false;
+    }
 
     if (isExpired) {
       // Do not continue if session is expired
@@ -460,6 +471,7 @@ export class SentryReplay implements Integration {
   doChangeToForegroundTasks(breadcrumb: Breadcrumb) {
     const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
 
+    this.isActive = true;
     this.createCustomBreadcrumb({
       ...breadcrumb,
       timestamp: isExpired ? new Date().getTime() / 1000 : breadcrumb.timestamp,
