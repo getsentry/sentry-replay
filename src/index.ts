@@ -440,24 +440,20 @@ export class SentryReplay implements Integration {
   doChangeToBackgroundTasks(breadcrumb: Breadcrumb) {
     const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
 
-    // We check current state to make sure that we do not create breadcrumbs
-    // for both page content being hidden *and* window blur
-    if (this.isActive) {
-      this.createCustomBreadcrumb({
-        ...breadcrumb,
-        // if somehow the page went hidden while session is expired, attach to previous session
-        timestamp: isExpired
-          ? this.session.lastActivity / 1000
-          : breadcrumb.timestamp,
-      });
-
-      this.isActive = false;
-    }
-
-    if (isExpired) {
-      // Do not continue if session is expired
+    // We check current state to make sure that we do nothing if the page is already inactive
+    if (!this.isActive) {
       return;
     }
+
+    this.createCustomBreadcrumb({
+      ...breadcrumb,
+      // if somehow the page went hidden while session is expired, attach to previous session
+      timestamp: isExpired
+        ? this.session.lastActivity / 1000
+        : breadcrumb.timestamp,
+    });
+
+    this.isActive = false;
 
     // Send replay when the page/tab becomes hidden. There is no reason to send
     // replay if it becomes visible, since no actions we care about were done
@@ -472,6 +468,7 @@ export class SentryReplay implements Integration {
     const isExpired = isSessionExpired(this.session, SESSION_IDLE_DURATION);
 
     this.isActive = true;
+
     this.createCustomBreadcrumb({
       ...breadcrumb,
       timestamp: isExpired ? new Date().getTime() / 1000 : breadcrumb.timestamp,
