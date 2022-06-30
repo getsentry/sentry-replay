@@ -123,6 +123,7 @@ export class SentryReplay implements Integration {
     initialFlushDelay = 5000,
     stickySession = false, // TBD: Making this opt-in for now
     useCompression = true,
+    captureOnlyOnError = false,
     rrwebConfig: {
       maskAllInputs = true,
       blockClass = 'sr-block',
@@ -144,7 +145,14 @@ export class SentryReplay implements Integration {
       flushMaxDelay,
       stickySession,
       initialFlushDelay,
+      captureOnlyOnError,
     };
+
+    // Modify rrweb options to checkoutEveryNthSecond if this is defined, as we don't know when an error occurs, so we want to try to minimize
+    if (this.options.captureOnlyOnError) {
+      // Checkout every minute, meaning we only get the last minute of events before the error happens
+      this.rrwebRecordOptions.checkoutEveryNms = 60000;
+    }
 
     this.eventBuffer = createEventBuffer({ useCompression });
   }
@@ -173,15 +181,7 @@ export class SentryReplay implements Integration {
 
     // Tag all (non replay) events that get sent to Sentry with the current
     // replay ID so that we can reference them later in the UI
-    addGlobalEventProcessor((event: Event) => {
-      // Do not apply replayId to the root event
-      if (event.message === ROOT_REPLAY_NAME) {
-        return event;
-      }
-
-      event.tags = { ...event.tags, replayId: this.session.id };
-      return event;
-    });
+    addGlobalEventProcessor(this.handleGlobalEvent);
 
     record({
       ...this.rrwebRecordOptions,
@@ -243,7 +243,10 @@ export class SentryReplay implements Integration {
 
     // Timestamp of the first replay event since the last flush, this gets
     // reset when we finish the replay event
-    if (!this.initialEventTimestampSinceFlush) {
+    if (
+      !this.initialEventTimestampSinceFlush &&
+      !this.options.captureOnlyOnError
+    ) {
       this.initialEventTimestampSinceFlush = now;
     }
 
@@ -252,9 +255,18 @@ export class SentryReplay implements Integration {
       window.clearTimeout(this.timeout);
     }
 
+    // We need to always run `cb` (e.g. in the case of captureOnlyOnError == true)
+    const cbResult = cb?.();
+
+    // If this option is turned on then we will only want to call `flushUpdate`
+    // explicitly
+    if (this.options.captureOnlyOnError) {
+      return;
+    }
+
     // If callback is true, we do not want to continue with flushing -- the
     // caller will need to handle it.
-    if (cb?.() === true) {
+    if (cbResult === true) {
       return;
     }
 
@@ -369,6 +381,32 @@ export class SentryReplay implements Integration {
       this.performanceObserver = null;
     }
   }
+
+  /**
+   * Core Sentry SDK global event handler. Attaches `replayId` to all [non-replay]
+   * events as a tag. Also handles the case where we only want to capture a reply
+   * when an error occurs.
+   **/
+  handleGlobalEvent = (event: Event) => {
+    // Do not apply replayId to the root event
+    if (
+      event.message === ROOT_REPLAY_NAME ||
+      event.message.startsWith(REPLAY_EVENT_NAME)
+    ) {
+      return event;
+    }
+
+    event.tags = { ...event.tags, replayId: this.session.id };
+
+    // Need to be very careful that this does not cause an infinite loop
+    if (this.options.captureOnlyOnError && event.exception) {
+      // XXX: Do we continue to record after?
+      // TODO: What happens if another error happens? Do we record in the same session?
+      setTimeout(() => this.flushUpdate());
+    }
+
+    return event;
+  };
 
   /**
    * Handle when visibility of the page content changes. Opening a new tab will
@@ -491,7 +529,9 @@ export class SentryReplay implements Integration {
     // Send replay when the page/tab becomes hidden. There is no reason to send
     // replay if it becomes visible, since no actions we care about were done
     // while it was hidden
-    this.flushUpdate();
+    if (!this.options.captureOnlyOnError) {
+      this.flushUpdate();
+    }
   }
 
   /**
