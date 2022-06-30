@@ -446,6 +446,8 @@ export class SentryReplay implements Integration {
       return;
     }
 
+    this.isActive = false;
+
     this.createCustomBreadcrumb({
       ...breadcrumb,
       // if somehow the page went hidden while session is expired, attach to previous session
@@ -453,8 +455,6 @@ export class SentryReplay implements Integration {
         ? this.session.lastActivity / 1000
         : breadcrumb.timestamp,
     });
-
-    this.isActive = false;
 
     // Send replay when the page/tab becomes hidden. There is no reason to send
     // replay if it becomes visible, since no actions we care about were done
@@ -467,6 +467,12 @@ export class SentryReplay implements Integration {
    */
   doChangeToForegroundTasks(breadcrumb: Breadcrumb) {
     const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
+
+    // No need to do anything if page is already active (from focus event or
+    // page visibility)
+    if (this.isActive) {
+      return;
+    }
 
     this.isActive = true;
 
