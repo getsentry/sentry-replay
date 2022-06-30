@@ -85,6 +85,9 @@ describe('SentryReplay', () => {
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+    // @ts-expect-error private member
+    replay.isActive = false;
+
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -104,7 +107,10 @@ describe('SentryReplay', () => {
     expect(replay).not.toHaveSameSession(initialSession);
   });
 
-  it('creates a new session and triggers a full dom snapshot when document becomes active after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+  it('creates a new session and triggers a full dom snapshot when document becomes focused after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+    // @ts-expect-error private member
+    replay.isActive = false;
+
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -280,6 +286,9 @@ describe('SentryReplay', () => {
   });
 
   it('does not record both a focus and visibility change', async () => {
+    // @ts-expect-error private member
+    replay.isActive = false;
+
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -287,18 +296,15 @@ describe('SentryReplay', () => {
       },
     });
 
-    // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
-
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
     const focusBreadcrumb = {
       type: 5,
-      timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
+      timestamp: +new Date(BASE_TIMESTAMP) / 1000,
       data: {
         tag: 'breadcrumb',
         payload: {
-          timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
+          timestamp: +new Date(BASE_TIMESTAMP) / 1000,
           type: 'default',
           category: 'ui.focus',
         },
@@ -307,6 +313,10 @@ describe('SentryReplay', () => {
 
     replay.eventBuffer.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('focus'));
+
+    // Pretend 5 seconds have passed
+    jest.advanceTimersByTime(ELAPSED);
+
     await new Promise(process.nextTick);
 
     expect(replay.sendReplayRequest).toHaveBeenCalled();

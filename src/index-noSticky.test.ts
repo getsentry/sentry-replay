@@ -52,6 +52,9 @@ describe('SentryReplay (no sticky)', () => {
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+    // @ts-expect-error private member
+    replay.isActive = false;
+
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
