@@ -210,21 +210,6 @@ describe('SentryReplay', () => {
     jest.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
-    const hiddenBreadcrumb = {
-      type: 5,
-      timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
-      data: {
-        tag: 'breadcrumb',
-        payload: {
-          timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
-          type: 'default',
-          category: 'ui.other',
-          data: {
-            label: 'Page is hidden',
-          },
-        },
-      },
-    };
 
     replay.eventBuffer.addEvent(TEST_EVENT);
     document.dispatchEvent(new Event('visibilitychange'));
@@ -232,104 +217,12 @@ describe('SentryReplay', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([TEST_EVENT, hiddenBreadcrumb])
-    );
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBeGreaterThan(BASE_TIMESTAMP);
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
-  });
-
-  it('does not record both a blur and visibility change', async () => {
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      get: function () {
-        return 'hidden';
-      },
-    });
-
-    // Pretend 5 seconds have passed
-    const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
-
-    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
-    const hiddenBreadcrumb = {
-      type: 5,
-      timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
-      data: {
-        tag: 'breadcrumb',
-        payload: {
-          timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
-          type: 'default',
-          category: 'ui.blur',
-        },
-      },
-    };
-
-    replay.eventBuffer.addEvent(TEST_EVENT);
-    window.dispatchEvent(new Event('blur'));
-    await new Promise(process.nextTick);
-
-    expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([TEST_EVENT, hiddenBreadcrumb])
-    );
-
-    mockSendReplayRequest.mockClear();
-    // Now dispatch visibility change immediately after blur
-    document.dispatchEvent(new Event('visibilitychange'));
-    await new Promise(process.nextTick);
-
-    expect(replay.sendReplayRequest).not.toHaveBeenCalled();
-  });
-
-  it('does not record both a focus and visibility change', async () => {
-    // @ts-expect-error private member
-    replay.isActive = false;
-
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      get: function () {
-        return 'visible';
-      },
-    });
-
-    const ELAPSED = 5000;
-    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
-    const focusBreadcrumb = {
-      type: 5,
-      timestamp: +new Date(BASE_TIMESTAMP) / 1000,
-      data: {
-        tag: 'breadcrumb',
-        payload: {
-          timestamp: +new Date(BASE_TIMESTAMP) / 1000,
-          type: 'default',
-          category: 'ui.focus',
-        },
-      },
-    };
-
-    replay.eventBuffer.addEvent(TEST_EVENT);
-    window.dispatchEvent(new Event('focus'));
-
-    // Pretend 5 seconds have passed
-    jest.advanceTimersByTime(ELAPSED);
-
-    await new Promise(process.nextTick);
-
-    expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([TEST_EVENT, focusBreadcrumb])
-    );
-
-    mockSendReplayRequest.mockClear();
-    // Now dispatch visibility change immediately after blur
-    document.dispatchEvent(new Event('visibilitychange'));
-    await new Promise(process.nextTick);
-
-    expect(replay.sendReplayRequest).not.toHaveBeenCalled();
   });
 
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', async () => {
