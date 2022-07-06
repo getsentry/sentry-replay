@@ -93,11 +93,6 @@ export class SentryReplay implements Integration {
   private retryCount = 0;
   private retryInterval = BASE_RETRY_INTERVAL;
 
-  /**
-   * If current browser window in an active state
-   */
-  private isActive = true;
-
   session: Session | undefined;
 
   static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
@@ -434,13 +429,6 @@ export class SentryReplay implements Integration {
   doChangeToBackgroundTasks(breadcrumb?: Breadcrumb) {
     const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
 
-    // We check current state to make sure that we do nothing if the page is already inactive
-    if (!this.isActive) {
-      return;
-    }
-
-    this.isActive = false;
-
     if (breadcrumb) {
       this.createCustomBreadcrumb({
         ...breadcrumb,
@@ -462,14 +450,6 @@ export class SentryReplay implements Integration {
    */
   doChangeToForegroundTasks(breadcrumb?: Breadcrumb) {
     const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
-
-    // No need to do anything if page is already active (from focus event or
-    // page visibility)
-    if (this.isActive) {
-      return;
-    }
-
-    this.isActive = true;
 
     if (breadcrumb) {
       this.createCustomBreadcrumb({

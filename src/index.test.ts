@@ -55,8 +55,6 @@ describe('SentryReplay', () => {
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
     mockRecord.takeFullSnapshot.mockClear();
-    // @ts-expect-error private property
-    replay.isActive = true;
   });
 
   afterAll(() => {
@@ -85,9 +83,6 @@ describe('SentryReplay', () => {
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
-    // @ts-expect-error private member
-    replay.isActive = false;
-
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -108,9 +103,6 @@ describe('SentryReplay', () => {
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes focused after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
-    // @ts-expect-error private member
-    replay.isActive = false;
-
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
