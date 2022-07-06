@@ -617,7 +617,23 @@ export class SentryReplay implements Integration {
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
   async sendReplayRequest({ endpoint, events }: ReplayRequest) {
-    // const payload = [events];
+    let payloadWithSequence;
+
+    if (typeof events === 'string') {
+      // XXX: newline is needed to separate sequence id from events
+      payloadWithSequence = `${this.session.sequenceId}
+${events}`;
+    } else {
+      const enc = new TextEncoder();
+      // XXX: newline is needed to separate sequence id from events
+      const sequence = enc.encode(`${this.session.sequenceId}
+`);
+      // Merge the two Uint8Arrays
+      payloadWithSequence = new Uint8Array(sequence.length + events.length);
+      payloadWithSequence.set(sequence);
+      payloadWithSequence.set(events, sequence.length);
+    }
+
     const envelope = createEnvelope(
       {
         event_id: this.session.id,
@@ -627,11 +643,9 @@ export class SentryReplay implements Integration {
       [
         [
           {
-            //@ts-expect-error setting envelope
+            // @ts-expect-error setting envelope
             type: 'replay_recording',
             length: events.length,
-            // filename: 'replay_recording',
-            // content_type: 'uncompressed',
           },
           events,
         ],
