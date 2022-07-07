@@ -36,6 +36,7 @@ import { logger } from './util/logger';
 import { handleDom, handleScope, handleFetch, handleXhr } from './coreHandlers';
 import createBreadcrumb from './util/createBreadcrumb';
 import { Session } from './session/Session';
+import { captureReplay } from './api/captureReplay';
 
 /**
  * Returns true if we want to flush immediately, otherwise continue with normal batching
@@ -95,6 +96,11 @@ export class SentryReplay implements Integration {
 
   private retryCount = 0;
   private retryInterval = BASE_RETRY_INTERVAL;
+
+  /**
+   * Flag to make sure we only create a single replay event
+   */
+  private hasSentReplay = false;
 
   session: Session | undefined;
 
@@ -589,7 +595,8 @@ export class SentryReplay implements Integration {
       console.error(new Error('[Sentry]: No transaction, no replay'));
       return;
     }
-    // // TEMP: keep sending a replay event just for the duration
+
+    // TEMP: keep sending a replay event just for the duration
     captureEvent({
       message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
       tags: {
@@ -605,6 +612,11 @@ export class SentryReplay implements Integration {
     this.initialEventTimestampSinceFlush = null;
     // TBD: Alternatively we could update this after every rrweb event
     this.updateLastActivity(lastActivity);
+
+    if (!this.hasSentReplay) {
+      captureReplay(this.session);
+      this.hasSentReplay = true;
+    }
   }
 
   /**
