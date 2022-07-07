@@ -604,15 +604,18 @@ export class SentryReplay implements Integration {
   async sendReplayRequest({ endpoint, events }: ReplayRequest) {
     let payloadWithSequence;
 
+    // XXX: newline is needed to separate sequence id from events
+    const sequenceId = `${JSON.stringify({
+      sequence_id: this.session.sequenceId,
+    })}
+`;
+
     if (typeof events === 'string') {
-      // XXX: newline is needed to separate sequence id from events
-      payloadWithSequence = `${this.session.sequenceId}
-${events}`;
+      payloadWithSequence = `${sequenceId}${events}`;
     } else {
       const enc = new TextEncoder();
       // XXX: newline is needed to separate sequence id from events
-      const sequence = enc.encode(`${this.session.sequenceId}
-`);
+      const sequence = enc.encode(sequenceId);
       // Merge the two Uint8Arrays
       payloadWithSequence = new Uint8Array(sequence.length + events.length);
       payloadWithSequence.set(sequence);
