@@ -596,15 +596,6 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    // TEMP: keep sending a replay event just for the duration
-    captureEvent({
-      message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
-      tags: {
-        replayId: this.session.id,
-        sequenceId: this.session.sequenceId++,
-      },
-    });
-
     this.addPerformanceEntries();
     const recordingData = await this.eventBuffer.finish();
     this.sendReplay(this.session.id, recordingData);
@@ -617,6 +608,15 @@ export class SentryReplay implements Integration {
       captureReplay(this.session);
       this.hasSentReplay = true;
     }
+
+    // TEMP: keep sending a replay event just for the duration
+    captureEvent({
+      message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
+      tags: {
+        replayId: this.session.id,
+        sequenceId: this.session.sequenceId++,
+      },
+    });
   }
 
   /**

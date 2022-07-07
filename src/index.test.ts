@@ -433,9 +433,8 @@ describe('SentryReplay', () => {
     replay.eventBuffer.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
-    // const ELAPSED = 5000;
-    // jest.advanceTimersByTime(ELAPSED);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(captureReplayMock).not.toHaveBeenCalled();
+    expect(replay.session.sequenceId).toBe(2);
   });
 });
