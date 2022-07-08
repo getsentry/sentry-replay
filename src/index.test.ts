@@ -437,4 +437,21 @@ describe('SentryReplay', () => {
     expect(captureReplayMock).not.toHaveBeenCalled();
     expect(replay.session.sequenceId).toBe(2);
   });
+
+  it('does not create root event unless there are events to send', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'hidden';
+      },
+    });
+
+    // Pretend 5 seconds have passed
+    const ELAPSED = 5000;
+    jest.advanceTimersByTime(ELAPSED);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
+    expect(replay.sendReplayRequest).not.toHaveBeenCalled();
+    expect(captureReplayMock).not.toHaveBeenCalled();
+  });
 });

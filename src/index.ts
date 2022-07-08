@@ -267,14 +267,24 @@ export class SentryReplay implements Integration {
   }
 
   /**
-   * Loads a session from storage, or creates a new one
+   * Loads a session from storage, or creates a new one if it does not exist or
+   * is expired.
    */
   loadSession({ expiry }: { expiry: number }): void {
-    this.session = getSession({
+    const newSession = getSession({
       expiry,
       stickySession: this.options.stickySession,
       currentSession: this.session,
     });
+
+    // We know if a session is expired if the id changes. In that case, we
+    // should reset the `hasSentReplay` flag, as we will need to send a new
+    // replay event
+    if (newSession.id !== this.session?.id && newSession.options.isNew) {
+      this.hasSentReplay = false;
+    }
+
+    this.session = newSession;
   }
 
   addListeners() {
@@ -597,6 +607,11 @@ export class SentryReplay implements Integration {
     }
 
     this.addPerformanceEntries();
+
+    if (!this.eventBuffer.length) {
+      return;
+    }
+
     const recordingData = await this.eventBuffer.finish();
     this.sendReplay(this.session.id, recordingData);
 
@@ -604,7 +619,8 @@ export class SentryReplay implements Integration {
     // TBD: Alternatively we could update this after every rrweb event
     this.updateLastActivity(lastActivity);
 
-    if (!this.hasSentReplay) {
+    // Only want to create replay event if session is new
+    if (!this.hasSentReplay && this.session.options.isNew) {
       captureReplay(this.session);
       this.hasSentReplay = true;
     }

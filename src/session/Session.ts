@@ -22,6 +22,7 @@ interface SessionObject {
 
 interface SessionOptions {
   stickySession?: boolean;
+  isNew?: boolean;
 }
 
 export class Session {
@@ -45,11 +46,11 @@ export class Session {
    */
   private _sequenceId;
 
-  private options: Record<string, any>;
+  public options: Required<SessionOptions>;
 
   constructor(
     session: Partial<SessionObject> = {},
-    { stickySession = false }: SessionOptions = {}
+    { stickySession = false, isNew = true }: SessionOptions = {}
   ) {
     const now = new Date().getTime();
     this._id = session.id || uuid4();
@@ -59,6 +60,7 @@ export class Session {
 
     this.options = {
       stickySession,
+      isNew,
     };
   }
 
