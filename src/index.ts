@@ -25,6 +25,7 @@ import type {
   InstrumentationType,
   SentryReplayPluginOptions,
   SentryReplayConfiguration,
+  RecordedEvents,
 } from './types';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
@@ -36,6 +37,7 @@ import { Session } from './session/Session';
 import { getEnvelopeEndpointWithUrlEncodedAuth } from '@sentry/core';
 import { createEnvelope, serializeEnvelope } from '@sentry/utils';
 import { captureReplayUpdate } from './api/captureReplayUpdate';
+import { createPayload } from './util/createPayload';
 
 /**
  * Returns true if we want to flush immediately, otherwise continue with normal batching
@@ -602,25 +604,12 @@ export class SentryReplay implements Integration {
    * Send replay attachment using either `sendBeacon()` or `fetch()`
    */
   async sendReplayRequest({ endpoint, events }: ReplayRequest) {
-    let payloadWithSequence;
-
-    // XXX: newline is needed to separate sequence id from events
-    const replayHeaders = `${JSON.stringify({
-      sequence_id: this.session.sequenceId,
-    })}
-`;
-
-    if (typeof events === 'string') {
-      payloadWithSequence = `${replayHeaders}${events}`;
-    } else {
-      const enc = new TextEncoder();
-      // XXX: newline is needed to separate sequence id from events
-      const sequence = enc.encode(replayHeaders);
-      // Merge the two Uint8Arrays
-      payloadWithSequence = new Uint8Array(sequence.length + events.length);
-      payloadWithSequence.set(sequence);
-      payloadWithSequence.set(events, sequence.length);
-    }
+    const payloadWithSequence = createPayload({
+      events,
+      headers: {
+        sequence_id: this.session.sequenceId,
+      },
+    });
 
     const envelope = createEnvelope(
       {
@@ -663,7 +652,7 @@ export class SentryReplay implements Integration {
   /**
    * Finalize and send the current replay event to Sentry
    */
-  async sendReplay(eventId: string, events: Uint8Array | string) {
+  async sendReplay(eventId: string, events: RecordedEvents) {
     // short circuit if there's no events to upload
     if (!events.length) {
       return;

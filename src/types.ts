@@ -5,6 +5,8 @@ import { record } from 'rrweb';
 export type RRWebEvent = eventWithTime;
 export type RRWebOptions = Parameters<typeof record>[0];
 
+export type RecordedEvents = Uint8Array | string;
+
 export interface ReplaySpan {
   description: string;
   op: string;
@@ -15,7 +17,7 @@ export interface ReplaySpan {
 
 export interface ReplayRequest {
   endpoint: string;
-  events: Uint8Array | string;
+  events: RecordedEvents;
 }
 
 export type InstrumentationType = 'scope' | 'dom' | 'fetch' | 'xhr';
