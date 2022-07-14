@@ -633,9 +633,9 @@ export class SentryReplay implements Integration {
           {
             // @ts-expect-error setting envelope
             type: 'replay_recording',
-            length: events.length,
+            length: payloadWithSequence.length,
           },
-          events,
+          payloadWithSequence,
         ],
       ]
     );
