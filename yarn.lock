@@ -655,7 +655,7 @@
     "@sentry/utils" "7.3.1"
     tslib "^1.9.3"
 
-"@sentry/hub@7.3.1", "@sentry/hub@^7.3.1":
+"@sentry/hub@7.3.1":
   version "7.3.1"
   resolved "https://registry.yarnpkg.com/@sentry/hub/-/hub-7.3.1.tgz#9a0e0570631997b58484a97b6a1d3aa7368121ec"
   integrity sha512-TFewt7zDvVLLrCfKkmvJEO4GPw3oPvR2t+606Z4S2gKiekGXKFGX4YC5u0ytoPfi+NMadXz4HivfrPuxrMy1JQ==
