@@ -12,7 +12,12 @@ module.exports = {
   ],
 
   globals: {},
-  rules: {},
+  rules: {
+    // note you must disable the base rule as it can report incorrect errors
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["error", {vars: "all",         varsIgnorePattern: '^_',
+        argsIgnorePattern: '^_',}]
+  },
   overrides: [
     {
       "files": ["*.spec.ts"],
