@@ -103,7 +103,7 @@ export class SentryReplay implements Integration {
    * event per session and it should only be created
    * immediately before sending recording)
    */
-  private shouldCreateReplay = false;
+  private needsCaptureReplay = false;
 
   session: Session | undefined;
 
@@ -274,17 +274,19 @@ export class SentryReplay implements Integration {
    * is expired.
    */
   loadSession({ expiry }: { expiry: number }): void {
-    const newSession = getSession({
+    const { type, session } = getSession({
       expiry,
       stickySession: this.options.stickySession,
       currentSession: this.session,
     });
 
-    if (newSession.options.isNew) {
-      this.shouldCreateReplay = true;
+    // If session was newly created (i.e. was not loaded from storage), then
+    // enable flag to create the root replay
+    if (type === 'new') {
+      this.needsCaptureReplay = true;
     }
 
-    this.session = newSession;
+    this.session = session;
   }
 
   addListeners() {
@@ -620,9 +622,9 @@ export class SentryReplay implements Integration {
     this.updateLastActivity(lastActivity);
 
     // Only want to create replay event if session is new
-    if (this.shouldCreateReplay) {
+    if (this.needsCaptureReplay) {
       captureReplay(this.session);
-      this.shouldCreateReplay = false;
+      this.needsCaptureReplay = false;
     }
 
     captureEvent({
