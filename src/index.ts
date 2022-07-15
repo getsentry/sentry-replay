@@ -237,8 +237,8 @@ export class SentryReplay implements Integration {
    * `<flushMinDelay>` milliseconds have elapsed since the last event
    * *OR* if `<flushMaxDelay>` milliseconds have elapsed.
    *
-   * Accepts a callback to perform side-effects and returns a boolean value if we
-   * should flush events immediately
+   * Accepts a callback to perform side-effects and can additionally return a
+   * function to have full control over the flushing.
    */
   addUpdate(cb?: AddUpdateCallback) {
     const now = new Date().getTime();
