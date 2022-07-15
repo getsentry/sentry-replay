@@ -625,7 +625,6 @@ export class SentryReplay implements Integration {
       this.shouldCreateReplay = false;
     }
 
-    // TEMP: keep sending a replay event just for the duration
     captureEvent({
       message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
       tags: {
