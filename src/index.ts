@@ -39,9 +39,10 @@ import { Session } from './session/Session';
 import { captureReplay } from './api/captureReplay';
 
 /**
- * Returns true if we want to flush immediately, otherwise continue with normal batching
+ * Can return a callback function to control flow, otherwise continue with
+ * normal batching
  */
-type AddUpdateCallback = () => boolean | void;
+type AddUpdateCallback = () => void | (() => void);
 
 const BASE_RETRY_INTERVAL = 5000;
 const MAX_RETRY_COUNT = 5;
@@ -87,8 +88,9 @@ export class SentryReplay implements Integration {
   private timeout: number;
 
   /**
-   * The timestamp of the first event since the last flush.
-   * This is used to determine if the maximum allowed time has passed before we should flush events again.
+   * The timestamp of the first event since the last flush. This is used to
+   * determine if the maximum allowed time has passed before events should be
+   * flushed again.
    */
   private initialEventTimestampSinceFlush: number | null = null;
 
@@ -117,8 +119,9 @@ export class SentryReplay implements Integration {
   }
 
   constructor({
-    uploadMinDelay = 5000,
-    uploadMaxDelay = 15000,
+    flushMinDelay = 5000,
+    flushMaxDelay = 15000,
+    initialFlushDelay = 5000,
     stickySession = false, // TBD: Making this opt-in for now
     useCompression = true,
     rrwebConfig: {
@@ -137,7 +140,13 @@ export class SentryReplay implements Integration {
       ...rrwebRecordOptions,
     };
 
-    this.options = { uploadMinDelay, uploadMaxDelay, stickySession };
+    this.options = {
+      flushMinDelay,
+      flushMaxDelay,
+      stickySession,
+      initialFlushDelay,
+    };
+
     this.eventBuffer = createEventBuffer({ useCompression });
   }
 
@@ -192,16 +201,32 @@ export class SentryReplay implements Integration {
           // incremental event updates and should be appended
           this.eventBuffer.addEvent(event, isCheckout);
 
-          // This event type is a fullsnapshot, we should save immediately when this occurs
+          // This event type is a fullsnapshot
           // See https://github.com/rrweb-io/rrweb/blob/d8f9290ca496712aa1e7d472549480c4e7876594/packages/rrweb/src/types.ts#L16
           if (event.type === 2) {
-            // A fullsnapshot happens on initial load and if we need to start a
-            // new replay due to idle timeout. In the latter case, a new session *should* have been started
-            // before triggering a new checkout
-            return true;
-          }
+            // If the full snapshot is due to an initial load, we will not have
+            // a previous session ID. In this case, we want to buffer events
+            // for a set amount of time before flushing. This can help avoid
+            // capturing replays of users that immediately close the window.
+            if (!this.session.previousSessionId) {
+              const now = new Date().getTime();
+              return () =>
+                setTimeout(
+                  () => this.flushUpdate(now),
+                  this.options.initialFlushDelay
+                );
+            }
 
-          return false;
+            // The other case where a full snapshot occurs is when a new replay
+            // needs to be started due to session expiration. The new session
+            // is started before triggering a new checkout and contains the id
+            // of the previous session. Do not immediately flush in this case
+            // to avoid capturing only the checkout and instead the replay will
+            // be captured if they perform any follow-up actions.
+            return () => {
+              // Do nothing
+            };
+          }
         });
       },
     });
@@ -209,8 +234,8 @@ export class SentryReplay implements Integration {
 
   /**
    * We want to batch uploads of replay events. Save events only if
-   * `<uploadMinDelay>` milliseconds have elapsed since the last event
-   * *OR* if `<uploadMaxDelay>` milliseconds have elapsed.
+   * `<flushMinDelay>` milliseconds have elapsed since the last event
+   * *OR* if `<flushMaxDelay>` milliseconds have elapsed.
    *
    * Accepts a callback to perform side-effects and returns a boolean value if we
    * should flush events immediately
@@ -229,32 +254,34 @@ export class SentryReplay implements Integration {
       window.clearTimeout(this.timeout);
     }
 
-    if (cb?.() === true) {
-      this.flushUpdate();
+    const result = cb?.();
+
+    if (typeof result === 'function') {
+      result();
       return;
     }
 
-    const uploadMaxDelayExceeded = isExpired(
+    const flushMaxDelayExceeded = isExpired(
       this.initialEventTimestampSinceFlush,
-      this.options.uploadMaxDelay,
+      this.options.flushMaxDelay,
       now
     );
 
-    // If `uploadMaxDelayExceeded` is true, then we should finish the replay event immediately,
-    // Otherwise schedule it to be finished in `this.options.uploadMinDelay`
-    if (uploadMaxDelayExceeded) {
+    // If `flushMaxDelayExceeded` is true, then we should finish the replay event immediately,
+    // Otherwise schedule it to be finished in `this.options.flushMinDelay`
+    if (flushMaxDelayExceeded) {
       logger.log('replay max delay exceeded, finishing replay event');
       this.flushUpdate();
       return;
     }
 
     // Set timer to finish replay event and send replay attachment to
-    // Sentry. Will be cancelled if an event happens before `uploadMinDelay`
+    // Sentry. Will be cancelled if an event happens before `flushMinDelay`
     // elapses.
     this.timeout = window.setTimeout(() => {
       logger.log('replay timeout exceeded, finishing replay event');
       this.flushUpdate(now);
-    }, this.options.uploadMinDelay);
+    }, this.options.flushMinDelay);
   }
 
   /**
@@ -284,6 +311,10 @@ export class SentryReplay implements Integration {
     // enable flag to create the root replay
     if (type === 'new') {
       this.needsCaptureReplay = true;
+    }
+
+    if (session.id !== this.session?.id) {
+      session.previousSessionId = this.session?.id;
     }
 
     this.session = session;
@@ -601,6 +632,7 @@ export class SentryReplay implements Integration {
       logger.error(
         new Error('Attempting to finish replay event after session expired.')
       );
+      return;
     }
 
     if (!this.session.id) {

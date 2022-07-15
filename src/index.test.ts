@@ -52,6 +52,7 @@ describe('SentryReplay', () => {
   beforeEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
+    replay.eventBuffer.destroy();
   });
 
   afterEach(() => {
@@ -286,7 +287,8 @@ describe('SentryReplay', () => {
     expect(initialSession.id).toBeDefined();
 
     // Idle for 15 minutes
-    jest.advanceTimersByTime(15 * 60000);
+    const FIFTEEN_MINUTES = 15 * 60000;
+    jest.advanceTimersByTime(FIFTEEN_MINUTES);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.
@@ -308,16 +310,40 @@ describe('SentryReplay', () => {
     // snapshot.
     expect(mockRecord.takeFullSnapshot).toHaveBeenCalledWith(true);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([
-        { data: { isCheckout: true }, timestamp: BASE_TIMESTAMP, type: 2 },
-      ])
-    );
+    expect(replay).not.toHaveSentReplay();
 
     // Should be a new session
     expect(replay).not.toHaveSameSession(initialSession);
 
-    mockSendReplayRequest.mockReset();
+    // Now do a click
+    domHandler({
+      name: 'click',
+    });
+
+    await advanceTimers(5000);
+
+    const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
+    const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+
+    expect(replay).toHaveSentReplay(
+      JSON.stringify([
+        { data: { isCheckout: true }, timestamp: newTimestamp, type: 2 },
+        {
+          type: 5,
+          timestamp: breadcrumbTimestamp,
+          data: {
+            tag: 'breadcrumb',
+            payload: {
+              timestamp: breadcrumbTimestamp / 1000,
+              type: 'default',
+              category: `ui.click`,
+              message: '<unknown>',
+              data: {},
+            },
+          },
+        },
+      ])
+    );
   });
 
   it('uploads a dom breadcrumb 5 seconds after listener receives an event', async () => {
@@ -354,7 +380,7 @@ describe('SentryReplay', () => {
   });
 
   it('fails to upload data on first call and retries after five seconds, sending successfully', async () => {
-    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Suppress console.errors
     jest.spyOn(console, 'error').mockImplementation(jest.fn());
     const mockConsole = console.error as jest.MockedFunction<
@@ -366,7 +392,7 @@ describe('SentryReplay', () => {
     });
     mockRecord._emitter(TEST_EVENT);
 
-    await new Promise(process.nextTick);
+    await advanceTimers(5000);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
@@ -381,7 +407,7 @@ describe('SentryReplay', () => {
     mockSendReplayRequest.mockImplementationOnce(() => {
       return Promise.resolve();
     });
-    advanceTimers(5000);
+    await advanceTimers(5000);
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
@@ -395,7 +421,7 @@ describe('SentryReplay', () => {
     mockSendReplayRequest.mockImplementationOnce(() => {
       return Promise.resolve();
     });
-    advanceTimers(5000);
+    await advanceTimers(5000);
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
   });
 
@@ -409,7 +435,7 @@ describe('SentryReplay', () => {
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    await advanceTimers(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
 
@@ -444,7 +470,7 @@ describe('SentryReplay', () => {
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
-    jest.advanceTimersByTime(ELAPSED);
+    await advanceTimers(ELAPSED);
     document.dispatchEvent(new Event('visibilitychange'));
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
