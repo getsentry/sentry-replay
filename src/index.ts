@@ -98,9 +98,12 @@ export class SentryReplay implements Integration {
   private retryInterval = BASE_RETRY_INTERVAL;
 
   /**
-   * Flag to make sure we only create a single replay event
+   * Flag to make sure we only create a replay event when
+   * necessary (i.e. we only want to have a single replay
+   * event per session and it should only be created
+   * immediately before sending recording)
    */
-  private hasSentReplay = false;
+  private shouldCreateReplay = false;
 
   session: Session | undefined;
 
@@ -277,11 +280,8 @@ export class SentryReplay implements Integration {
       currentSession: this.session,
     });
 
-    // We know if a session is expired if the id changes. In that case, we
-    // should reset the `hasSentReplay` flag, as we will need to send a new
-    // replay event
-    if (newSession.id !== this.session?.id && newSession.options.isNew) {
-      this.hasSentReplay = false;
+    if (newSession.options.isNew) {
+      this.shouldCreateReplay = true;
     }
 
     this.session = newSession;
@@ -620,9 +620,9 @@ export class SentryReplay implements Integration {
     this.updateLastActivity(lastActivity);
 
     // Only want to create replay event if session is new
-    if (!this.hasSentReplay && this.session.options.isNew) {
+    if (this.shouldCreateReplay) {
       captureReplay(this.session);
-      this.hasSentReplay = true;
+      this.shouldCreateReplay = false;
     }
 
     // TEMP: keep sending a replay event just for the duration

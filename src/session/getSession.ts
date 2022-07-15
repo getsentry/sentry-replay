@@ -37,15 +37,6 @@ export function getSession({
 
     if (!isExpired) {
       logger.log(`Using existing session: ${session.id}`);
-
-      // we want to preserve the `isNew` option from currentSession, as all
-      // sessions returned from `fetchSession()` will not be considered new.
-      // however, it's possible that `getSession` is called multiple times
-      // before a root replay is created, meaning we will end up having a
-      // session where isNew is false and not having a root session created.
-      if (currentSession) {
-        session.options.isNew = currentSession.options.isNew;
-      }
       return session;
     } else {
       logger.log(`Session has expired`);

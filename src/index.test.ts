@@ -1,7 +1,6 @@
 // mock functions need to be imported first
 import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
 
-import * as Sentry from '@sentry/browser';
 import * as SentryUtils from '@sentry/utils';
 import * as CaptureReplay from '@/api/captureReplay';
 
@@ -10,9 +9,6 @@ import {
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
 } from '@/session/constants';
-import { captureReplay } from './api/captureReplay';
-
-type captureEventMockType = jest.MockedFunction<typeof Sentry.captureEvent>;
 
 jest.useFakeTimers({ advanceTimers: true });
 
