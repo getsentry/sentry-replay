@@ -434,7 +434,7 @@ describe('SentryReplay', () => {
     expect(replay.session.sequenceId).toBe(2);
   });
 
-  it('does not create root event unless there are events to send', async () => {
+  it('does not create root event when there are no events to send', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
