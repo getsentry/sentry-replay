@@ -433,9 +433,7 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // No activity has occurred, session's last activity should remain the same
-    expect(replay.session.lastActivity).toBeGreaterThanOrEqual(
-      BASE_TIMESTAMP + 15000
-    );
+    expect(replay.session.lastActivity).toBeGreaterThanOrEqual(BASE_TIMESTAMP);
     expect(replay.session.sequenceId).toBe(1);
 
     // next tick should do nothing
