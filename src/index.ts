@@ -39,10 +39,9 @@ import { Session } from './session/Session';
 import { captureReplay } from './api/captureReplay';
 
 /**
- * Can return a callback function to control flow, otherwise continue with
- * normal batching
+ * Returns true to return control to calling function, otherwise continue with normal batching
  */
-type AddUpdateCallback = () => void | (() => void);
+type AddUpdateCallback = () => boolean | void;
 
 const BASE_RETRY_INTERVAL = 5000;
 const MAX_RETRY_COUNT = 5;
@@ -210,11 +209,12 @@ export class SentryReplay implements Integration {
             // capturing replays of users that immediately close the window.
             if (!this.session.previousSessionId) {
               const now = new Date().getTime();
-              return () =>
-                setTimeout(
-                  () => this.flushUpdate(now),
-                  this.options.initialFlushDelay
-                );
+              setTimeout(
+                () => this.flushUpdate(now),
+                this.options.initialFlushDelay
+              );
+
+              return true;
             }
 
             // The other case where a full snapshot occurs is when a new replay
@@ -223,9 +223,7 @@ export class SentryReplay implements Integration {
             // of the previous session. Do not immediately flush in this case
             // to avoid capturing only the checkout and instead the replay will
             // be captured if they perform any follow-up actions.
-            return () => {
-              // Do nothing
-            };
+            return true;
           }
         });
       },
@@ -237,8 +235,8 @@ export class SentryReplay implements Integration {
    * `<flushMinDelay>` milliseconds have elapsed since the last event
    * *OR* if `<flushMaxDelay>` milliseconds have elapsed.
    *
-   * Accepts a callback to perform side-effects and can additionally return a
-   * function to have full control over the flushing.
+   * Accepts a callback to perform side-effects and returns true to stop batch
+   * processing and hand back control to caller.
    */
   addUpdate(cb?: AddUpdateCallback) {
     const now = new Date().getTime();
@@ -254,10 +252,9 @@ export class SentryReplay implements Integration {
       window.clearTimeout(this.timeout);
     }
 
-    const result = cb?.();
-
-    if (typeof result === 'function') {
-      result();
+    // If callback is true, we do not want to continue with flushing -- the
+    // caller will need to handle it.
+    if (cb?.() === true) {
       return;
     }
 
