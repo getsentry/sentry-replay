@@ -210,7 +210,7 @@ export class SentryReplay implements Integration {
             if (!this.session.previousSessionId) {
               const now = new Date().getTime();
               setTimeout(
-                () => this.flushUpdate(now),
+                () => this.conditionalFlush(now),
                 this.options.initialFlushDelay
               );
 
@@ -399,10 +399,10 @@ export class SentryReplay implements Integration {
     event.tags = { ...event.tags, replayId: this.session.id };
 
     // Need to be very careful that this does not cause an infinite loop
-    if (this.options.captureOnlyOnError && event.exception) {
+    if (event.exception) {
       // XXX: Do we continue to record after?
       // TODO: What happens if another error happens? Do we record in the same session?
-      setTimeout(() => this.flushUpdate());
+      setTimeout(() => this.conditionalFlush());
     }
 
     return event;
@@ -529,9 +529,7 @@ export class SentryReplay implements Integration {
     // Send replay when the page/tab becomes hidden. There is no reason to send
     // replay if it becomes visible, since no actions we care about were done
     // while it was hidden
-    if (!this.options.captureOnlyOnError) {
-      this.flushUpdate();
-    }
+    this.conditionalFlush();
   }
 
   /**
@@ -664,6 +662,21 @@ export class SentryReplay implements Integration {
     return false;
   }
 
+  /**
+   * Only flush if `captureOnlyOnError` is false.
+   */
+  conditionalFlush(lastActivity?: number) {
+    if (!this.options.captureOnlyOnError) {
+      return;
+    }
+
+    return this.flushUpdate(lastActivity);
+  }
+
+  /**
+   * Flush events captured from mutation observer, performance observer, core
+   * SDK breadcrumbs.
+   */
   async flushUpdate(lastActivity?: number) {
     if (!this.checkAndHandleExpiredSession()) {
       logger.error(
