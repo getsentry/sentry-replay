@@ -391,7 +391,7 @@ export class SentryReplay implements Integration {
     // Do not apply replayId to the root event
     if (
       event.message === ROOT_REPLAY_NAME ||
-      event.message.startsWith(REPLAY_EVENT_NAME)
+      event.message?.startsWith(REPLAY_EVENT_NAME)
     ) {
       return event;
     }
