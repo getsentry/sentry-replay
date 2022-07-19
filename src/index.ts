@@ -399,10 +399,10 @@ export class SentryReplay implements Integration {
     event.tags = { ...event.tags, replayId: this.session.id };
 
     // Need to be very careful that this does not cause an infinite loop
-    if (event.exception) {
-      // XXX: Do we continue to record after?
+    if (this.options.captureOnlyOnError && event.exception) {
+      // TODO: Do we continue to record after?
       // TODO: What happens if another error happens? Do we record in the same session?
-      setTimeout(() => this.conditionalFlush());
+      setTimeout(() => this.flushUpdate());
     }
 
     return event;
@@ -666,7 +666,7 @@ export class SentryReplay implements Integration {
    * Only flush if `captureOnlyOnError` is false.
    */
   conditionalFlush(lastActivity?: number) {
-    if (!this.options.captureOnlyOnError) {
+    if (this.options.captureOnlyOnError) {
       return;
     }
 
