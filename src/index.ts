@@ -148,9 +148,9 @@ export class SentryReplay implements Integration {
       captureOnlyOnError,
     };
 
-    // Modify rrweb options to checkoutEveryNthSecond if this is defined, as we don't know when an error occurs, so we want to try to minimize
+    // Modify rrweb options to checkoutEveryNthSecond if this is defined, as we don't know when an error occurs, so we want to try to minimize the number of events captured.
     if (this.options.captureOnlyOnError) {
-      // Checkout every minute, meaning we only get the last minute of events before the error happens
+      // Checkout every minute, meaning we only get up-to one minute of events before the error happens
       this.rrwebRecordOptions.checkoutEveryNms = 60000;
     }
 
