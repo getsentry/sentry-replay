@@ -65,13 +65,13 @@ describe('SentryReplay (capture only on error)', () => {
 
     // TODO: captureException(new Error('testing')) does not trigger addGlobalEventProcessor
     captureException('testing');
+    await new Promise(process.nextTick);
+    await new Promise(process.nextTick);
 
-    await new Promise(process.nextTick);
-    await new Promise(process.nextTick);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
   });
 
-  it('does not send a replay when triggering a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+  it('does not send a replay when triggering a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -82,11 +82,12 @@ describe('SentryReplay (capture only on error)', () => {
     jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
 
     expect(replay).not.toHaveSentReplay();
   });
 
-  it('does not send a replay if user hides the tab and comes back within 60 seconds', () => {
+  it('does not send a replay if user hides the tab and comes back within 60 seconds', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -94,10 +95,12 @@ describe('SentryReplay (capture only on error)', () => {
       },
     });
     document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
+
     expect(replay).not.toHaveSentReplay();
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 100);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -105,6 +108,7 @@ describe('SentryReplay (capture only on error)', () => {
       },
     });
     document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).not.toHaveSentReplay();
@@ -126,7 +130,6 @@ describe('SentryReplay (capture only on error)', () => {
     replay.eventBuffer.addEvent(TEST_EVENT);
 
     document.dispatchEvent(new Event('visibilitychange'));
-
     await new Promise(process.nextTick);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
