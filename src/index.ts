@@ -198,7 +198,7 @@ export class SentryReplay implements Integration {
     });
 
     // Otherwise, these will be captured after the first flush, which means the
-    // URL and timestamps could incorrect
+    // URL and timestamps could be incorrect
     this.initialState = {
       timestamp: new Date().getTime(),
       url: `${window.location.origin}${window.location.pathname}`,
