@@ -754,17 +754,19 @@ export class SentryReplay implements Integration {
     this.initialEventTimestampSinceFlush = null;
 
     try {
-      // Save the timestamp before sending replay because `captureEvent` should only be called after successfully uploading a replay
-      const timestamp = new Date().getTime();
+      // Save the timestamp before sending replay because `captureEvent` should
+      // only be called after successfully uploading a replay
+      const timestamp = lastActivity ?? new Date().getTime();
       const recordingData = await this.eventBuffer.finish();
       await this.sendReplay(this.session.id, recordingData);
 
       // The below will only happen after successfully sending replay //
 
       // TBD: Alternatively we could update this after every rrweb event
-      // TBD: Should the last activity timestamp here be "now" (after
-      // successful upload) or before the upload?
-      this.updateLastActivity(lastActivity);
+      // `timestamp` should reflect when the event happens. e.g. the timestamp
+      // of the event is passed as an argument in the case where a timeout
+      // occurs.
+      this.updateLastActivity(timestamp);
 
       captureEvent({
         timestamp,
