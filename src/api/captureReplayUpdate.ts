@@ -10,7 +10,7 @@ export function captureReplayUpdate(session: Session, timestamp: number) {
     message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
     tags: {
       replayId: session.id,
-      sequenceId: session.sequenceId++,
+      segmentId: session.segmentId++,
     },
   });
 }
