@@ -1,5 +1,4 @@
-import { BASE_TIMESTAMP } from '@test';
-import { RRWebEvent } from '@/types';
+import { RecordingEvent } from '@/types';
 
 type RecordAdditionalProperties = {
   takeFullSnapshot: jest.Mock;
@@ -10,7 +9,7 @@ type RecordAdditionalProperties = {
   mirror: unknown;
 
   // Custom property to fire events in tests, does not exist in rrweb.record
-  _emitter: (event: RRWebEvent, ...args: any[]) => void;
+  _emitter: (event: RecordingEvent, ...args: any[]) => void;
 };
 
 export type RecordMock = jest.MockedFunction<typeof rrweb.record> &
@@ -31,7 +30,7 @@ jest.mock('rrweb', () => {
     mockRecordFn._emitter(
       {
         data: { isCheckout },
-        timestamp: BASE_TIMESTAMP,
+        timestamp: new Date().getTime(),
         type: isCheckout ? 2 : 3,
       },
       isCheckout

@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 it('creates a non-sticky session when one does not exist', function () {
-  const session = getSession({ expiry: 900000, stickySession: false });
+  const { session } = getSession({ expiry: 900000, stickySession: false });
 
   expect(FetchSession.fetchSession).not.toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
@@ -42,6 +42,7 @@ it('creates a non-sticky session when one does not exist', function () {
     id: 'test_session_id',
     sequenceId: 0,
     lastActivity: expect.any(Number),
+    sampled: true,
     started: expect.any(Number),
   });
 
@@ -52,7 +53,7 @@ it('creates a non-sticky session when one does not exist', function () {
 it('creates a non-sticky session, regardless of session existing in sessionStorage', function () {
   saveSession(createMockSession(new Date().getTime() - 10000));
 
-  const session = getSession({ expiry: 1000, stickySession: false });
+  const { session } = getSession({ expiry: 1000, stickySession: false });
 
   expect(FetchSession.fetchSession).not.toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
@@ -61,7 +62,7 @@ it('creates a non-sticky session, regardless of session existing in sessionStora
 });
 
 it('creates a non-sticky session, when one is expired', function () {
-  const session = getSession({
+  const { session } = getSession({
     expiry: 1000,
     stickySession: false,
     currentSession: new Session({
@@ -82,7 +83,7 @@ it('creates a non-sticky session, when one is expired', function () {
 it('creates a sticky session when one does not exist', function () {
   expect(FetchSession.fetchSession()).toBe(null);
 
-  const session = getSession({ expiry: 900000, stickySession: true });
+  const { session } = getSession({ expiry: 900000, stickySession: true });
 
   expect(FetchSession.fetchSession).toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
@@ -91,6 +92,7 @@ it('creates a sticky session when one does not exist', function () {
     id: 'test_session_id',
     sequenceId: 0,
     lastActivity: expect.any(Number),
+    sampled: true,
     started: expect.any(Number),
   });
 
@@ -99,6 +101,7 @@ it('creates a sticky session when one does not exist', function () {
     id: 'test_session_id',
     sequenceId: 0,
     lastActivity: expect.any(Number),
+    sampled: true,
     started: expect.any(Number),
   });
 });
@@ -107,7 +110,7 @@ it('fetches an existing sticky session', function () {
   const now = new Date().getTime();
   saveSession(createMockSession(now));
 
-  const session = getSession({ expiry: 1000, stickySession: true });
+  const { session } = getSession({ expiry: 1000, stickySession: true });
 
   expect(FetchSession.fetchSession).toHaveBeenCalled();
   expect(CreateSession.createSession).not.toHaveBeenCalled();
@@ -116,6 +119,7 @@ it('fetches an existing sticky session', function () {
     id: 'test_session_id',
     sequenceId: 0,
     lastActivity: now,
+    sampled: true,
     started: now,
   });
 });
@@ -124,7 +128,7 @@ it('fetches an expired sticky session', function () {
   const now = new Date().getTime();
   saveSession(createMockSession(new Date().getTime() - 2000));
 
-  const session = getSession({ expiry: 1000, stickySession: true });
+  const { session } = getSession({ expiry: 1000, stickySession: true });
 
   expect(FetchSession.fetchSession).toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
@@ -136,7 +140,7 @@ it('fetches an expired sticky session', function () {
 });
 
 it('fetches a non-expired non-sticky session', function () {
-  const session = getSession({
+  const { session } = getSession({
     expiry: 1000,
     stickySession: false,
     currentSession: new Session({

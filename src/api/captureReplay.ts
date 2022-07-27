@@ -1,8 +1,9 @@
 import { getCurrentHub } from '@sentry/core';
 
 import type { Session } from '@/session/Session';
+import { InitialState } from '@/types';
 
-export function captureReplay(session: Session) {
+export function captureReplay(session: Session, initialState: InitialState) {
   const hub = getCurrentHub();
 
   hub.captureEvent(
@@ -13,6 +14,8 @@ export function captureReplay(session: Session) {
       // message: ROOT_REPLAY_NAME, // Shouldn't be needed now
       replay_id: session.id,
       sequence_id: session.sequenceId, // TODO: Should this increment?
+      tags: { url: initialState.url },
+      timestamp: initialState.timestamp,
     },
     { event_id: session.id }
   );

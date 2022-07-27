@@ -1,3 +1,4 @@
+import { isSampled } from '@/util/isSampled';
 import { uuid4 } from '@sentry/utils';
 import { saveSession } from './saveSession';
 
@@ -18,10 +19,16 @@ interface SessionObject {
    * Sequence ID specific to replay updates
    */
   sequenceId: number;
+
+  /**
+   * Is the session sampled?
+   */
+  sampled: boolean;
 }
 
 interface SessionOptions {
   stickySession?: boolean;
+  samplingRate?: number;
 }
 
 export class Session {
@@ -45,17 +52,28 @@ export class Session {
    */
   private _sequenceId;
 
-  private options: Record<string, any>;
+  /**
+   * Previous session ID
+   */
+  private _previousSessionId: string | undefined;
+
+  /**
+   * Is the Session sampled?
+   */
+  private _sampled: boolean;
+
+  public readonly options: Required<Pick<SessionOptions, 'stickySession'>>;
 
   constructor(
     session: Partial<SessionObject> = {},
-    { stickySession = false }: SessionOptions = {}
+    { stickySession = false, samplingRate = 1.0 }: SessionOptions = {}
   ) {
     const now = new Date().getTime();
     this._id = session.id || uuid4();
     this._started = session.started ?? now;
     this._lastActivity = session.lastActivity ?? now;
     this._sequenceId = session.sequenceId ?? 0;
+    this._sampled = session.sampled ?? isSampled(samplingRate);
 
     this.options = {
       stickySession,
@@ -92,12 +110,29 @@ export class Session {
     }
   }
 
+  get previousSessionId() {
+    return this._previousSessionId;
+  }
+
+  set previousSessionId(id: string) {
+    this._previousSessionId = id;
+  }
+
+  get sampled() {
+    return this._sampled;
+  }
+
+  set sampled(_isSampled: boolean) {
+    throw new Error('Unable to change sampled value');
+  }
+
   toJSON() {
     return {
       id: this.id,
       started: this.started,
       lastActivity: this.lastActivity,
       sequenceId: this._sequenceId,
+      sampled: this._sampled,
     } as SessionObject;
   }
 }

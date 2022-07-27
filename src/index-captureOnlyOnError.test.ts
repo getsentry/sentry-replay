@@ -1,7 +1,11 @@
+jest.unmock('@sentry/browser');
+
 // mock functions need to be imported first
+import { captureException } from '@sentry/browser';
+import * as SentryCore from '@sentry/core';
 import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
 
-import * as SentryUtils from '@sentry/utils';
+import * as CaptureReplay from '@/api/captureReplay';
 import { SentryReplay } from '@';
 import {
   SESSION_IDLE_DURATION,
@@ -15,24 +19,28 @@ async function advanceTimers(time: number) {
   await new Promise(process.nextTick);
 }
 
-describe('SentryReplay (no sticky)', () => {
+describe('SentryReplay (capture only on error)', () => {
   let replay: SentryReplay;
   type MockSendReplayRequest = jest.MockedFunction<
     typeof replay.sendReplayRequest
   >;
   let mockSendReplayRequest: MockSendReplayRequest;
-  let domHandler: (args: any) => any;
   const { record: mockRecord } = mockRrweb();
+
+  jest.spyOn(CaptureReplay, 'captureReplay');
+  const captureReplayMock = CaptureReplay.captureReplay as jest.MockedFunction<
+    typeof CaptureReplay.captureReplay
+  >;
+  jest.spyOn(SentryCore, 'captureEvent');
+  const captureEventMock = SentryCore.captureEvent as jest.MockedFunction<
+    typeof SentryCore.captureEvent
+  >;
 
   beforeAll(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    jest
-      .spyOn(SentryUtils, 'addInstrumentationHandler')
-      .mockImplementation((_type, handler: (args: any) => any) => {
-        domHandler = handler;
-      });
-
-    ({ replay } = mockSdk({ replayOptions: { stickySession: false } }));
+    ({ replay } = mockSdk({
+      replayOptions: { captureOnlyOnError: true, stickySession: false },
+    }));
     jest.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
     mockSendReplayRequest.mockImplementation(
@@ -52,6 +60,7 @@ describe('SentryReplay (no sticky)', () => {
   afterEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.clearSession();
+    replay.eventBuffer.destroy();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
   });
 
@@ -59,7 +68,22 @@ describe('SentryReplay (no sticky)', () => {
     replay && replay.destroy();
   });
 
-  it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+  it('uploads a replay when captureException is called', async () => {
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    mockRecord._emitter(TEST_EVENT);
+
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(replay).not.toHaveSentReplay();
+
+    // TODO: captureException(new Error('testing')) does not trigger addGlobalEventProcessor
+    captureException('testing');
+    await new Promise(process.nextTick);
+    await new Promise(process.nextTick);
+
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+  });
+
+  it('does not send a replay when triggering a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -67,21 +91,15 @@ describe('SentryReplay (no sticky)', () => {
       },
     });
 
-    const initialSession = replay.session;
-
     jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
 
     document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
 
-    expect(mockRecord.takeFullSnapshot).toHaveBeenLastCalledWith(true);
-
-    // Should have created a new session
-    expect(replay).not.toHaveSameSession(initialSession);
+    expect(replay).not.toHaveSentReplay();
   });
 
-  it('does not create a new session if user hides the tab and comes back within [VISIBILITY_CHANGE_TIMEOUT] seconds', () => {
-    const initialSession = replay.session;
-
+  it('does not send a replay if user hides the tab and comes back within 60 seconds', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -89,11 +107,12 @@ describe('SentryReplay (no sticky)', () => {
       },
     });
     document.dispatchEvent(new Event('visibilitychange'));
-    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-    expect(replay).toHaveSameSession(initialSession);
+    await new Promise(process.nextTick);
+
+    expect(replay).not.toHaveSentReplay();
 
     // User comes back before `VISIBILITY_CHANGE_TIMEOUT` elapses
-    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 1);
+    jest.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT - 100);
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -101,14 +120,13 @@ describe('SentryReplay (no sticky)', () => {
       },
     });
     document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-    // Should NOT have created a new session
-    expect(replay).toHaveSameSession(initialSession);
+    expect(replay).not.toHaveSentReplay();
   });
 
-  it('uploads a replay event when document becomes hidden', async () => {
-    mockRecord.takeFullSnapshot.mockClear();
+  it('does not upload a replay event when document becomes hidden', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -124,22 +142,14 @@ describe('SentryReplay (no sticky)', () => {
     replay.eventBuffer.addEvent(TEST_EVENT);
 
     document.dispatchEvent(new Event('visibilitychange'));
-
     await new Promise(process.nextTick);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
-
-    // Session's last activity should be updated
-    expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
-    expect(replay.session.sequenceId).toBe(1);
-
-    // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay).not.toHaveSentReplay();
   });
 
-  it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', async () => {
+  it('does not upload a replay event if 5 seconds have elapsed since the last replay event occurred', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     mockRecord._emitter(TEST_EVENT);
     // Pretend 5 seconds have passed
@@ -148,17 +158,10 @@ describe('SentryReplay (no sticky)', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
-
-    // No activity has occurred, session's last activity should remain the same
-    expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
-    expect(replay.session.sequenceId).toBe(1);
-
-    // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay).not.toHaveSentReplay();
   });
 
-  it('uploads a replay event if 15 seconds have elapsed since the last replay upload', async () => {
+  it('does not upload a replay event if 15 seconds have elapsed since the last replay upload', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Fire a new event every 4 seconds, 4 times
     [...Array(4)].forEach(() => {
@@ -171,38 +174,26 @@ describe('SentryReplay (no sticky)', () => {
     mockRecord._emitter(TEST_EVENT);
     await new Promise(process.nextTick);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([...Array(5)].map(() => TEST_EVENT))
-    );
+    expect(replay).not.toHaveSentReplay();
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
     mockSendReplayRequest.mockClear();
     await advanceTimers(5000);
     expect(replay).not.toHaveSentReplay();
 
-    expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
-    expect(replay.session.sequenceId).toBe(1);
-    // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
-
     // Let's make sure it continues to work
     mockSendReplayRequest.mockClear();
     mockRecord._emitter(TEST_EVENT);
     await advanceTimers(5000);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    expect(replay).not.toHaveSentReplay();
 
     // Clean-up
     mockSendReplayRequest.mockReset();
   });
 
-  it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
-    const initialSession = replay.session;
-
-    expect(initialSession.id).toBeDefined();
-
+  it('does not upload if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
     // Idle for 15 minutes
-    const FIFTEEN_MINUTES = 15 * 60000;
-    jest.advanceTimersByTime(FIFTEEN_MINUTES);
+    jest.advanceTimersByTime(15 * 60000);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.
@@ -222,42 +213,54 @@ describe('SentryReplay (no sticky)', () => {
     // and produce a checkout based on a previous checkout + updates, and then
     // replay the event on top. Or maybe replay the event on top of a refresh
     // snapshot.
+
+    expect(replay).not.toHaveSentReplay();
     expect(mockRecord.takeFullSnapshot).toHaveBeenCalledWith(true);
 
-    // Should be a new session
-    expect(replay).not.toHaveSameSession(initialSession);
+    mockSendReplayRequest.mockReset();
+  });
 
-    // Replay does not send immediately because checkout was due to expired session
+  it('has the correct timestamps with deferred root event and last replay update', async () => {
+    // Mock `replay.sendReplayRequest` so that it takes 7 seconds to resolve
+    jest.spyOn(replay, 'sendReplayRequest');
+    (
+      replay.sendReplayRequest as jest.MockedFunction<
+        typeof replay.sendReplayRequest
+      >
+    ).mockImplementationOnce(() => {
+      return new Promise((resolve) => {
+        jest.advanceTimersByTime(7000);
+        resolve();
+      });
+    });
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    mockRecord._emitter(TEST_EVENT);
+
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).not.toHaveSentReplay();
 
-    // Now do a click
-    domHandler({
-      name: 'click',
-    });
+    jest.advanceTimersByTime(5000);
 
-    await advanceTimers(5000);
+    // TODO: captureException(new Error('testing')) does not trigger addGlobalEventProcessor
+    captureException('testing');
 
-    const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
-    const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+    // ugh...
+    await new Promise(process.nextTick);
+    await new Promise(process.nextTick);
+    await new Promise(process.nextTick);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([
-        { data: { isCheckout: true }, timestamp: newTimestamp, type: 2 },
-        {
-          type: 5,
-          timestamp: breadcrumbTimestamp,
-          data: {
-            tag: 'breadcrumb',
-            payload: {
-              timestamp: breadcrumbTimestamp / 1000,
-              type: 'default',
-              category: `ui.click`,
-              message: '<unknown>',
-              data: {},
-            },
-          },
-        },
-      ])
+    expect(captureReplayMock).toHaveBeenCalledWith(
+      expect.anything(), // TBD: We could assert session's last activity here
+      expect.objectContaining({
+        timestamp: BASE_TIMESTAMP,
+      })
     );
+
+    expect(captureEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timestamp: BASE_TIMESTAMP + 5000, // the exception happened roughly 5 seconds after BASE_TIMESTAMP
+      })
+    );
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
   });
 });

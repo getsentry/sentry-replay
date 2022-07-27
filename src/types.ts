@@ -2,8 +2,8 @@ import type { eventWithTime } from 'rrweb/typings/types';
 
 import { record } from 'rrweb';
 
-export type RRWebEvent = eventWithTime;
-export type RRWebOptions = Parameters<typeof record>[0];
+export type RecordingEvent = eventWithTime;
+export type RecordingConfig = Parameters<typeof record>[0];
 
 export type RecordedEvents = Uint8Array | string;
 
@@ -43,12 +43,17 @@ export interface SentryReplayPluginOptions {
   /**
    * The amount of time to wait before sending a replay
    */
-  uploadMinDelay?: number;
+  flushMinDelay?: number;
 
   /**
    * The max amount of time to wait before sending a replay
    */
-  uploadMaxDelay?: number;
+  flushMaxDelay?: number;
+
+  /**
+   * The amount of time to buffer the initial snapshot
+   */
+  initialFlushDelay?: number;
 
   /**
    * If false, will create a new session per pageload
@@ -61,11 +66,29 @@ export interface SentryReplayPluginOptions {
    * (default is true)
    */
   useCompression?: boolean;
+
+  /**
+   * Only capture replays when an error happens
+   */
+  captureOnlyOnError?: boolean;
+
+  /**
+   * The sampling rate for replays. 1.0 will record all replays, 0 will record none.
+   */
+  replaysSamplingRate?: number;
 }
 
 export interface SentryReplayConfiguration extends SentryReplayPluginOptions {
   /**
-   * Options for `rrweb.recordsetup
+   * Options for `rrweb.record()`
    */
-  rrwebConfig?: RRWebOptions;
+  recordingConfig?: RecordingConfig;
+}
+
+/**
+ * Some initial state captured before creating a root replay event
+ */
+export interface InitialState {
+  timestamp: number;
+  url: string;
 }
