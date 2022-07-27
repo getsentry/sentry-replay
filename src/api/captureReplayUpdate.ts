@@ -1,7 +1,7 @@
 import { captureEvent } from '@sentry/core';
 
-import type { Session } from '@/session/Session';
 import { REPLAY_EVENT_NAME } from '@/session/constants';
+import type { Session } from '@/session/Session';
 
 export function captureReplayUpdate(session: Session, timestamp: number) {
   captureEvent({

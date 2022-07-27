@@ -1,17 +1,12 @@
 import { addGlobalEventProcessor, getCurrentHub } from '@sentry/core';
-import { addInstrumentationHandler } from '@sentry/utils';
-import { Event, Integration, Breadcrumb } from '@sentry/types';
 import { getEnvelopeEndpointWithUrlEncodedAuth } from '@sentry/core';
+import { Breadcrumb, Event, Integration } from '@sentry/types';
+import { addInstrumentationHandler } from '@sentry/utils';
 import { createEnvelope, serializeEnvelope } from '@sentry/utils';
-
 import { EventType, record } from 'rrweb';
 
-import {
-  createPerformanceEntries,
-  createMemoryEntry,
-  ReplayPerformanceEntry,
-} from './createPerformanceEntry';
-import { createEventBuffer, IEventBuffer } from './eventBuffer';
+import { captureReplay } from './api/captureReplay';
+import { captureReplayUpdate } from './api/captureReplayUpdate';
 import {
   RECORDING_EVENT_NAME,
   REPLAY_EVENT_NAME,
@@ -19,28 +14,31 @@ import {
   VISIBILITY_CHANGE_TIMEOUT,
 } from './session/constants';
 import { getSession } from './session/getSession';
-import type {
-  InstrumentationType,
-  InitialState,
-  RecordingEvent,
-  RecordingConfig,
-  ReplaySpan,
-  ReplayRequest,
-  SentryReplayPluginOptions,
-  SentryReplayConfiguration,
-  RecordedEvents,
-} from './types';
+import { Session } from './session/Session';
+import createBreadcrumb from './util/createBreadcrumb';
+import { createPayload } from './util/createPayload';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-import { handleDom, handleScope, handleFetch, handleXhr } from './coreHandlers';
-import createBreadcrumb from './util/createBreadcrumb';
-import { Session } from './session/Session';
-import { captureReplay } from './api/captureReplay';
 import { supportsSendBeacon } from './util/supportsSendBeacon';
-import { captureReplayUpdate } from './api/captureReplayUpdate';
-
-import { createPayload } from './util/createPayload';
+import { handleDom, handleFetch, handleScope, handleXhr } from './coreHandlers';
+import {
+  createMemoryEntry,
+  createPerformanceEntries,
+  ReplayPerformanceEntry,
+} from './createPerformanceEntry';
+import { createEventBuffer, IEventBuffer } from './eventBuffer';
+import type {
+  InitialState,
+  InstrumentationType,
+  RecordedEvents,
+  RecordingConfig,
+  RecordingEvent,
+  ReplayRequest,
+  ReplaySpan,
+  SentryReplayConfiguration,
+  SentryReplayPluginOptions,
+} from './types';
 
 /**
  * Returns true to return control to calling function, otherwise continue with normal batching
