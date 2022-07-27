@@ -50,6 +50,7 @@ Sentry.init({
 ## Configuration
 
 | key | type | default | description |
+| --- | ---- | ------- | ----------- |
 | flushMinDelay | number | 5000 | The minimum time to wait (in ms) before sending the recording payload. The payload is sent if `flushMinDelay` ms have elapsed between two events. |
 | flushMaxDelay | number | 15000 | The maximum time to wait (in ms) when sending the recording payload. The payload is sent if events occur at an interval less than `flushMinDelay` and `flushMaxDelay` ms have elapsed since the last time a payload was sent. |
 | initialFlushDelay | number | 5000 | The amount of time to wait (in ms) before sending the initial recording payload. This helps drop recordings where users visit and close the page quickly. |
