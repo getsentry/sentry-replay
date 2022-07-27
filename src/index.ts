@@ -11,7 +11,8 @@ import {
 } from './createPerformanceEntry';
 import { createEventBuffer, IEventBuffer } from './eventBuffer';
 import {
-  ROOT_REPLAY_NAME,
+  RECORDING_EVENT_NAME,
+  REPLAY_EVENT_NAME,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
 } from './session/constants';
@@ -380,8 +381,10 @@ export class SentryReplay implements Integration {
   handleGlobalEvent = (event: Event) => {
     // Do not apply replayId to the root event
     if (
-      event.message === ROOT_REPLAY_NAME ||
-      event.message?.startsWith(REPLAY_EVENT_NAME)
+      // @ts-expect-error new event type
+      event.type === REPLAY_EVENT_NAME ||
+      // @ts-expect-error new event type
+      event.type === RECORDING_EVENT_NAME
     ) {
       return event;
     }
@@ -792,7 +795,7 @@ export class SentryReplay implements Integration {
     const payloadWithSequence = createPayload({
       events,
       headers: {
-        sequence_id: this.session.sequenceId,
+        segment_id: this.session.segmentId,
       },
     });
 

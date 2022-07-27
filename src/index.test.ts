@@ -90,7 +90,7 @@ describe('SentryReplay', () => {
       started: BASE_TIMESTAMP,
     });
     expect(replay.session.id).toBeDefined();
-    expect(replay.session.sequenceId).toBeDefined();
+    expect(replay.session.segmentId).toBeDefined();
     expect(captureReplayMock).not.toHaveBeenCalled();
   });
 
@@ -243,7 +243,7 @@ describe('SentryReplay', () => {
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
-    expect(replay.session.sequenceId).toBe(1);
+    expect(replay.session.segmentId).toBe(1);
 
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
@@ -273,7 +273,7 @@ describe('SentryReplay', () => {
     expect(replay).not.toHaveSentReplay();
 
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
-    expect(replay.session.sequenceId).toBe(1);
+    expect(replay.session.segmentId).toBe(1);
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
 
@@ -379,7 +379,7 @@ describe('SentryReplay', () => {
       ])
     );
 
-    expect(replay.session.sequenceId).toBe(1);
+    expect(replay.session.segmentId).toBe(1);
 
     // breadcrumbs array should be empty
     expect(replay.breadcrumbs).toHaveLength(0);
@@ -402,7 +402,7 @@ describe('SentryReplay', () => {
     await advanceTimers(5000);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-    expect(captureEventMock).not.toHaveBeenCalled();
+    expect(captureEventMock).toHaveBeenCalledTimes(1); // root event was created
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
@@ -410,6 +410,7 @@ describe('SentryReplay', () => {
     // console messages in case an error happens after
     mockConsole.mockClear();
 
+    captureEventMock.mockReset();
     mockSendReplayRequest.mockReset();
     mockSendReplayRequest.mockImplementationOnce(() => {
       throw new Error('Something bad happened');
@@ -435,7 +436,7 @@ describe('SentryReplay', () => {
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBeGreaterThanOrEqual(BASE_TIMESTAMP);
-    expect(replay.session.sequenceId).toBe(1);
+    expect(replay.session.segmentId).toBe(1);
 
     // next tick should do nothing
 
@@ -466,7 +467,7 @@ describe('SentryReplay', () => {
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(captureReplayMock).toHaveBeenCalled();
-    expect(replay.session.sequenceId).toBe(1);
+    expect(replay.session.segmentId).toBe(1);
 
     (
       replay.sendReplayRequest as jest.MockedFunction<
@@ -480,7 +481,7 @@ describe('SentryReplay', () => {
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(captureReplayMock).not.toHaveBeenCalled();
-    expect(replay.session.sequenceId).toBe(2);
+    expect(replay.session.segmentId).toBe(2);
   });
 
   it('does not create root event when there are no events to send', async () => {
