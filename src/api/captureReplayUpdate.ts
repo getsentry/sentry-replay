@@ -10,10 +10,5 @@ export function captureReplayUpdate(session: Session, timestamp: number) {
 
     replay_id: session.id,
     sequence_id: ++session.sequenceId,
-
-    // TODO: Is this still necessary?
-    tags: {
-      replayId: session.id,
-    },
   });
 }
