@@ -1,6 +1,8 @@
 import { addGlobalEventProcessor, getCurrentHub } from '@sentry/core';
 import { addInstrumentationHandler } from '@sentry/utils';
 import { Event, Integration, Breadcrumb } from '@sentry/types';
+import { getEnvelopeEndpointWithUrlEncodedAuth } from '@sentry/core';
+import { createEnvelope, serializeEnvelope } from '@sentry/utils';
 
 import { EventType, record } from 'rrweb';
 
@@ -36,10 +38,8 @@ import createBreadcrumb from './util/createBreadcrumb';
 import { Session } from './session/Session';
 import { captureReplay } from './api/captureReplay';
 import { supportsSendBeacon } from './util/supportsSendBeacon';
-
-import { getEnvelopeEndpointWithUrlEncodedAuth } from '@sentry/core';
-import { createEnvelope, serializeEnvelope } from '@sentry/utils';
 import { captureReplayUpdate } from './api/captureReplayUpdate';
+
 import { createPayload } from './util/createPayload';
 
 /**

@@ -16,7 +16,7 @@ interface SessionObject {
   lastActivity: number;
 
   /**
-   * Sequence ID specific to replay updates
+   * Segment ID for replay events
    */
   segmentId: number;
 
