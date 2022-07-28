@@ -10,12 +10,12 @@ const config = defineConfig({
   input: './src/index.ts',
   output: [
     {
-      file: pkg.main,
+      dir: '../dist',
       format: 'cjs',
       sourcemap: true,
     },
     {
-      file: pkg.module,
+      dir: '../dist',
       format: 'esm',
     },
   ],

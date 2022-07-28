@@ -7,16 +7,17 @@
   "scripts": {
     "bootstrap": "yarn && cd demo && yarn",
     "build": "yarn rollup --configPlugin @rollup/plugin-typescript",
+    "build:tsd": "yarn tsc -d --emitDeclarationOnly --declarationDir dist/types",
     "build:all": "yarn run build:worker && yarn run build:core",
     "build:dev": "NODE_ENV=development yarn build:all",
-    "build:prod": "NODE_ENV=production yarn build:all",
+    "build:prod": "NODE_ENV=production yarn build:all && yarn build:tsd",
     "build:core": "yarn build --config config/rollup.config.core.ts",
     "build:worker": "yarn build --config config/rollup.config.worker.ts",
     "clean": "yarn rimraf dist",
     "dev": "yarn build:dev --watch",
     "lint": "yarn eslint . --ext .js,.jsx,.ts,.tsx",
     "prepare": "husky install",
-    "prepack": "yarn build:prod",
+    "prepack": "yarn clean && yarn build:prod",
     "size": "yarn build:prod && size-limit",
     "size-limit-build": "yarn pack",
     "start:demo": "yarn build:dev && cd demo && yarn start",
@@ -39,7 +40,7 @@
     "@babel/core": "^7.17.5",
     "@rollup/plugin-node-resolve": "^13.3.0",
     "@rollup/plugin-replace": "^4.0.0",
-    "@rollup/plugin-typescript": "^8.3.1",
+    "@rollup/plugin-typescript": "^8.3.4",
     "@sentry/browser": "^7.7.0",
     "@size-limit/preset-big-lib": "^7.0.8",
     "@types/jest": "^28.1.1",
@@ -80,10 +81,14 @@
   },
   "size-limit": [
     {
+      "path": "dist/worker-*.js",
+      "limit": "4500ms"
+    },
+    {
       "path": "dist/index.js",
       "limit": "4500ms"
     }
- ],
+  ],
   "volta": {
     "node": "16.15.1",
     "yarn": "1.22.19"

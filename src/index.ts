@@ -180,7 +180,7 @@ export class SentryReplay implements Integration {
    *
    * Creates or loads a session, attaches listeners to varying events (DOM, PerformanceObserver, Recording, Sentry SDK, etc)
    */
-  setup() {
+  async setup() {
     this.loadSession({ expiry: SESSION_IDLE_DURATION });
 
     // If there is no session, then something bad has happened - can't continue
@@ -193,7 +193,7 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    this.eventBuffer = createEventBuffer({
+    this.eventBuffer = await createEventBuffer({
       useCompression: this.options.useCompression,
     });
 
