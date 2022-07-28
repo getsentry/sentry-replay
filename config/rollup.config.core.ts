@@ -1,3 +1,5 @@
+import path from 'path';
+
 import replace from '@rollup/plugin-replace';
 import typescript from '@rollup/plugin-typescript';
 import { defineConfig } from 'rollup';
@@ -10,12 +12,12 @@ const config = defineConfig({
   input: './src/index.ts',
   output: [
     {
-      file: pkg.main,
+      dir: path.join(__dirname, '..', 'dist'),
       format: 'cjs',
       sourcemap: true,
     },
     {
-      file: pkg.module,
+      dir: path.join(__dirname, '..', 'dist', 'esm'),
       format: 'esm',
     },
   ],

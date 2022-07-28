@@ -1,13 +1,16 @@
 import { logger } from './util/logger';
-import workerString from './worker/worker.js';
 import { RecordingEvent, WorkerResponse } from './types';
 
 interface CreateEventBufferParams {
   useCompression: boolean;
 }
 
-export function createEventBuffer({ useCompression }: CreateEventBufferParams) {
+export async function createEventBuffer({
+  useCompression,
+}: CreateEventBufferParams) {
   if (useCompression && window.Worker) {
+    const workerString = await import('./worker/worker.js');
+    // @ts-expect-error Temp ignoring
     const workerBlob = new Blob([workerString]);
     const workerUrl = URL.createObjectURL(workerBlob);
 
