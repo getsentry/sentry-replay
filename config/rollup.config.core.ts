@@ -17,7 +17,7 @@ const config = defineConfig({
       sourcemap: true,
     },
     {
-      dir: path.join(__dirname, '..', 'dist'),
+      dir: path.join(__dirname, '..', 'dist', 'esm'),
       format: 'esm',
     },
   ],

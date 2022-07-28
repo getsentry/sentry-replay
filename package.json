@@ -3,7 +3,7 @@
   "version": "0.4.6",
   "description": "User replays for Sentry",
   "main": "dist/index.js",
-  "module": "dist/index.es.js",
+  "module": "dist/esm/index.js",
   "scripts": {
     "bootstrap": "yarn && cd demo && yarn",
     "build": "yarn rollup --configPlugin @rollup/plugin-typescript",
