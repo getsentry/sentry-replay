@@ -1,4 +1,8 @@
-import { addGlobalEventProcessor, getCurrentHub } from '@sentry/core';
+import {
+  addGlobalEventProcessor,
+  captureException,
+  getCurrentHub,
+} from '@sentry/core';
 import { Breadcrumb, DsnComponents, Event, Integration } from '@sentry/types';
 import { addInstrumentationHandler } from '@sentry/utils';
 import { EventType, record } from 'rrweb';
@@ -651,25 +655,27 @@ export class SentryReplay implements Integration {
   }
 
   /**
-   * Create a span for each performance entry. The parent transaction is `this.replayEvent`.
+   * Create a "span" for each performance entry. The parent transaction is `this.replayEvent`.
    */
   createPerformanceSpans(entries: ReplayPerformanceEntry[]) {
-    entries.forEach(({ type, start, end, name, data }) => {
-      this.eventBuffer.addEvent({
-        type: EventType.Custom,
-        timestamp: start,
-        data: {
-          tag: 'performanceSpan',
-          payload: {
-            op: type,
-            description: name,
-            startTimestamp: start,
-            endTimestamp: end,
-            data,
+    return Promise.all(
+      entries.map(({ type, start, end, name, data }) =>
+        this.eventBuffer.addEvent({
+          type: EventType.Custom,
+          timestamp: start,
+          data: {
+            tag: 'performanceSpan',
+            payload: {
+              op: type,
+              description: name,
+              startTimestamp: start,
+              endTimestamp: end,
+              data,
+            },
           },
-        },
-      });
-    });
+        })
+      )
+    );
   }
 
   /**
@@ -681,16 +687,24 @@ export class SentryReplay implements Integration {
     const entries = [...this.performanceEvents];
     this.performanceEvents = [];
 
-    // Parse the entries
-    const entryEvents = createPerformanceEntries(entries);
+    return this.createPerformanceSpans(createPerformanceEntries(entries));
+  }
 
+  /**
+   * Create a "span" for the total amount of memory being used by JS objects
+   * (including v8 internal objects).
+   */
+  addMemoryEntry() {
     // window.performance.memory is a non-standard API and doesn't work on all browsers
     // so we check before creating the event.
-    if ('memory' in window.performance) {
-      // @ts-expect-error memory doesn't exist on type Performance as the API is non-standard
-      entryEvents.push(createMemoryEntry(window.performance.memory));
+    if (!('memory' in window.performance)) {
+      return;
     }
-    this.createPerformanceSpans(entryEvents);
+
+    return this.createPerformanceSpans([
+      // @ts-expect-error memory doesn't exist on type Performance as the API is non-standard (we check that it exists above)
+      createMemoryEntry(window.performance.memory),
+    ]);
   }
 
   /**
@@ -751,12 +765,14 @@ export class SentryReplay implements Integration {
       console.error(new Error('[Sentry]: No transaction, no replay'));
       return;
     }
-
-    this.addPerformanceEntries();
+    await this.addPerformanceEntries();
 
     if (!this.eventBuffer.length) {
       return;
     }
+
+    // Only attach memory event if eventBuffer is not empty
+    this.addMemoryEntry();
 
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
@@ -786,6 +802,7 @@ export class SentryReplay implements Integration {
 
       captureReplayUpdate({ session: this.session, timestamp });
     } catch (err) {
+      captureException(err);
       console.error(err);
     }
   }

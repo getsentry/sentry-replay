@@ -55,6 +55,7 @@ describe('SentryReplay (capture only on error)', () => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
     mockRecord.takeFullSnapshot.mockClear();
+    captureEventMock.mockClear();
   });
 
   afterEach(() => {
@@ -258,9 +259,10 @@ describe('SentryReplay (capture only on error)', () => {
       })
     );
 
-    expect(captureEventMock).toHaveBeenCalledWith(
+    expect(captureEventMock).toHaveBeenCalledTimes(2);
+    expect(captureEventMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        timestamp: (BASE_TIMESTAMP + 5000) / 1000, // the exception happened roughly 5 seconds after BASE_TIMESTAMP
+        timestamp: expect.closeTo((BASE_TIMESTAMP + 5000) / 1000, 1), // the exception happened roughly 5 seconds after BASE_TIMESTAMP
       })
     );
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
