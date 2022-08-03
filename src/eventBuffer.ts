@@ -144,7 +144,6 @@ export class EventBufferCompressionWorker implements IEventBuffer {
       method: 'addEvent',
       args: [event],
     });
-    logger.log('Message posted to compression worker');
     this.eventBufferItemLength++;
   };
 
