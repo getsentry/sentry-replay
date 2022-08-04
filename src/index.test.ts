@@ -59,7 +59,9 @@ describe('SentryReplay', () => {
     replay.eventBuffer.destroy();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    jest.runAllTimers();
+    await new Promise(process.nextTick);
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.clearSession();
@@ -189,7 +191,6 @@ describe('SentryReplay', () => {
 
     replay.eventBuffer.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
-    await new Promise(process.nextTick);
     await new Promise(process.nextTick);
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalled();

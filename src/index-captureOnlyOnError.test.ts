@@ -58,7 +58,9 @@ describe('SentryReplay (capture only on error)', () => {
     captureEventMock.mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    jest.runAllTimers();
+    await new Promise(process.nextTick);
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.clearSession();
     replay.eventBuffer.destroy();

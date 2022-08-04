@@ -777,6 +777,10 @@ export class SentryReplay implements Integration {
       console.error(new Error('[Sentry]: No transaction, no replay'));
       return;
     }
+
+    // Since already flushing, ensure other queued flushes are cancelled
+    clearTimeout(this.timeout);
+
     await this.addPerformanceEntries();
 
     if (!this.eventBuffer.length) {
@@ -784,7 +788,7 @@ export class SentryReplay implements Integration {
     }
 
     // Only attach memory event if eventBuffer is not empty
-    this.addMemoryEntry();
+    await this.addMemoryEntry();
 
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
