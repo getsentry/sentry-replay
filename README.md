@@ -58,7 +58,7 @@ Sentry.init({
 | `useCompression` | `boolean` | `true` | Uses `WebWorkers` (if available) to compress the recording payload before uploading to Sentry. |
 | `captureOnlyOnError` | `boolean` | `false` | Only capture the recording when an error happens. |
 | `replaysSamplingRate` | `number` | `1.0` | The rate at which to sample replays. (1.0 will collect all replays, 0 will collect no replays). |
-| `recordingConfig: { maskAllInputs }` | `boolean` | `true` | Mask all `<input>` elements |
-| `recordingConfig: { blockClass }` | `string` | `'sr-block'` | Redact all elements with the class name `sr-block` |
-| `recordingConfig: { ignoreClass }` | `string` | `'sr-ignore'` | Ignores all elements with the class name `sr-ignore` |
-| `recordingConfig: { maskTextClass }` | `string` | `'sr-mask'` | Mask all elements with the class name `sr-ignore` |
+| `recordingConfig.maskAllInputs` | `boolean` | `true` | Mask all `<input>` elements |
+| `recordingConfig.blockClass` | `string` | `'sr-block'` | Redact all elements with the class name `sr-block` |
+| `recordingConfig.ignoreClass` | `string` | `'sr-ignore'` | Ignores all elements with the class name `sr-ignore` |
+| `recordingConfig.maskTextClass` | `string` | `'sr-mask'` | Mask all elements with the class name `sr-ignore` |
