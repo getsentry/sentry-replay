@@ -7,14 +7,20 @@ import { InitialState } from '@/types';
 interface CaptureReplayParams {
   session: Session;
   initialState: InitialState;
+  errorIds: string[];
 }
 
-export function captureReplay({ session, initialState }: CaptureReplayParams) {
+export function captureReplay({
+  session,
+  initialState,
+  errorIds,
+}: CaptureReplayParams) {
   captureEvent(
     {
       // @ts-expect-error replay_event is a new event type
       type: REPLAY_EVENT_NAME,
-      timestamp: initialState.timestamp / 1000,
+      replay_start_timestamp: initialState.timestamp / 1000,
+      error_ids: errorIds,
       replay_id: session.id,
       segment_id: session.segmentId, // TODO: Should this increment?
       tags: { url: initialState.url },

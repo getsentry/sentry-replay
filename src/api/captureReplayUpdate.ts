@@ -9,15 +9,18 @@ interface CaptureReplayUpdateParams {
    * Timestamp of the event in milliseconds
    */
   timestamp: number;
+  errorIds: string[];
 }
 export function captureReplayUpdate({
   session,
   timestamp,
+  errorIds,
 }: CaptureReplayUpdateParams) {
   captureEvent({
     // @ts-expect-error replay_event is a new event type
     type: REPLAY_EVENT_NAME,
-    timestamp: timestamp / 1000,
+    replay_start_timestamp: timestamp / 1000,
+    error_ids: errorIds,
     replay_id: session.id,
     segment_id: ++session.segmentId,
   });
