@@ -111,6 +111,9 @@ export class EventBufferCompressionWorker implements IEventBuffer {
           return;
         }
 
+        // At this point, we'll always want to remove listener regardless of result status
+        this.worker.removeEventListener('message', listener);
+
         if (!data.success) {
           // TODO: Do some error handling, not sure what
           logger.error(data.response);
@@ -120,7 +123,6 @@ export class EventBufferCompressionWorker implements IEventBuffer {
         }
 
         resolve(data.response);
-        this.worker.removeEventListener('message', listener);
       };
 
       // Note: we can't use `once` option because it's possible it needs to
