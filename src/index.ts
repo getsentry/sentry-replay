@@ -285,7 +285,6 @@ export class SentryReplay implements Integration {
   destroy() {
     logger.log('Destroying instance');
     this.removeListeners();
-    // this.eventBuffer.clear();
   }
 
   clearSession() {

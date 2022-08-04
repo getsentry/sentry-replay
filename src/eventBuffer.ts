@@ -19,7 +19,6 @@ export function createEventBuffer({ useCompression }: CreateEventBufferParams) {
       if (worker) {
         return new EventBufferCompressionWorker(worker);
       } else {
-        // TODO: Debugging
         captureException(new Error('Unable to create compression worker'));
       }
     } catch {
