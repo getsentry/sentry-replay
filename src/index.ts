@@ -113,6 +113,11 @@ export class SentryReplay implements Integration {
    */
   private initialState: InitialState;
 
+  /**
+   * List of error events that should be associated with the replay
+   */
+  errorIds: string[] = [];
+
   session: Session | undefined;
 
   static attachmentUrlFromDsn(dsn: DsnComponents, eventId: string) {
@@ -287,8 +292,8 @@ export class SentryReplay implements Integration {
    * Currently, this needs to be manually called (e.g. for tests). Sentry SDK does not support a teardown
    */
   destroy() {
+    logger.log('Destroying instance');
     this.removeListeners();
-    this.eventBuffer.destroy();
   }
 
   clearSession() {
@@ -396,6 +401,13 @@ export class SentryReplay implements Integration {
     }
 
     event.tags = { ...event.tags, replayId: this.session.id };
+
+    if (event.type === 'transaction') {
+      return event;
+    }
+
+    // XXX: Is it safe to assume that all other events are error events?
+    this.errorIds.push(event.event_id);
 
     // Need to be very careful that this does not cause an infinite loop
     if (this.options.captureOnlyOnError && event.exception) {
@@ -777,8 +789,13 @@ export class SentryReplay implements Integration {
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
       // This event needs to exist before calling `sendReplay`
-      captureReplay({ session: this.session, initialState: this.initialState });
+      captureReplay({
+        session: this.session,
+        initialState: this.initialState,
+        errorIds: this.errorIds,
+      });
       this.needsCaptureReplay = false;
+      this.errorIds = [];
     }
 
     // Reset this to null regardless of `sendReplay` result so that future
@@ -800,7 +817,12 @@ export class SentryReplay implements Integration {
       // occurs.
       this.updateLastActivity(timestamp);
 
-      captureReplayUpdate({ session: this.session, timestamp });
+      captureReplayUpdate({
+        session: this.session,
+        timestamp,
+        errorIds: this.errorIds,
+      });
+      this.errorIds = [];
     } catch (err) {
       captureException(err);
       console.error(err);

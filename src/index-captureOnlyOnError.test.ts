@@ -250,12 +250,13 @@ describe('SentryReplay (capture only on error)', () => {
     await new Promise(process.nextTick);
     await new Promise(process.nextTick);
 
-    expect(captureReplayMock).toHaveBeenCalledWith(
+    expect(captureReplayMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         initialState: {
           timestamp: BASE_TIMESTAMP,
           url: 'http://localhost/',
         },
+        errorIds: [expect.any(String)],
       })
     );
 
@@ -263,6 +264,7 @@ describe('SentryReplay (capture only on error)', () => {
     expect(captureEventMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         timestamp: expect.closeTo((BASE_TIMESTAMP + 5000) / 1000, 1), // the exception happened roughly 5 seconds after BASE_TIMESTAMP
+        errorIds: [],
       })
     );
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));

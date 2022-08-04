@@ -1,3 +1,5 @@
+import { captureException } from '@sentry/core';
+
 import { logger } from './util/logger';
 import workerString from './worker/worker.js';
 import { RecordingEvent, WorkerRequest, WorkerResponse } from './types';
@@ -12,14 +14,20 @@ export function createEventBuffer({ useCompression }: CreateEventBufferParams) {
     const workerUrl = URL.createObjectURL(workerBlob);
 
     try {
-      logger.log('using compression worker');
-      return new EventBufferCompressionWorker(new Worker(workerUrl));
+      logger.log('Using compression worker');
+      const worker = new Worker(workerUrl);
+      if (worker) {
+        return new EventBufferCompressionWorker(worker);
+      } else {
+        captureException(new Error('Unable to create compression worker'));
+      }
     } catch {
       // catch and ignore, fallback to simple event buffer
     }
+    logger.log('Falling back to simple event buffer');
   }
 
-  logger.log('falling back to simple event buffer');
+  logger.log('Using simple buffer');
   return new EventBufferArray();
 }
 
@@ -124,10 +132,11 @@ export class EventBufferCompressionWorker implements IEventBuffer {
 
   init() {
     this.postMessage({ id: this.id, method: 'init', args: [] });
-    logger.log('Message posted to worker');
+    logger.log('Initialized compression worker');
   }
 
   destroy() {
+    logger.log('Destroying compression worker');
     this.worker.terminate();
     this.worker = null;
   }
@@ -161,7 +170,7 @@ export class EventBufferCompressionWorker implements IEventBuffer {
     this.sendEventToWorker(event);
   }
 
-  sendEventToWorker(event: RecordingEvent) {
+  sendEventToWorker = (event: RecordingEvent) => {
     const promise = this.postMessage({
       id: this.id,
       method: 'addEvent',
@@ -174,7 +183,7 @@ export class EventBufferCompressionWorker implements IEventBuffer {
     this.eventBufferItemLength++;
 
     return promise;
-  }
+  };
 
   finishRequest = async (id: number) => {
     const promise = this.postMessage({ id, method: 'finish', args: [] });
