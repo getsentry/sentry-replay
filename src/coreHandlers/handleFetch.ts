@@ -1,4 +1,5 @@
 import { ReplayPerformanceEntry } from '@/createPerformanceEntry';
+import { isIngestHost } from '@/util/isIngestHost';
 
 interface FetchHandlerData {
   args: Parameters<typeof fetch>;
@@ -25,6 +26,11 @@ export function handleFetch(
   }
 
   const { startTimestamp, endTimestamp, fetchData, response } = handlerData;
+
+  // Do not capture fetches to Sentry ingestion endpoint
+  if (isIngestHost(fetchData.url)) {
+    return null;
+  }
 
   return {
     type: 'resource.fetch',

@@ -1,4 +1,5 @@
 import { ReplayPerformanceEntry } from '@/createPerformanceEntry';
+import { isIngestHost } from '@/util/isIngestHost';
 
 // From sentry-javascript
 type XHRSendInput =
@@ -30,7 +31,7 @@ export function handleXhr(handlerData: XhrHandlerData): ReplayPerformanceEntry {
   if (handlerData.xhr.__sentry_own_request__) {
     // Taken from sentry-javascript
     // Only capture non-sentry requests
-    return;
+    return null;
   }
 
   if (handlerData.startTimestamp) {
@@ -47,6 +48,11 @@ export function handleXhr(handlerData: XhrHandlerData): ReplayPerformanceEntry {
     url,
     status_code: statusCode,
   } = handlerData.xhr.__sentry_xhr__ || {};
+
+  // Do not capture fetches to Sentry ingestion endpoint
+  if (isIngestHost(url)) {
+    return null;
+  }
 
   return {
     type: 'resource.xhr',
