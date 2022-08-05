@@ -11,17 +11,20 @@ interface CaptureReplayUpdateParams {
    */
   timestamp: number;
   errorIds: string[];
+  traceIds: string[];
 }
 export function captureReplayUpdate({
   session,
   timestamp,
   errorIds,
+  traceIds,
 }: CaptureReplayUpdateParams) {
   captureEvent({
     timestamp: timestamp / 1000,
     message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
     // @ts-expect-error replay event type accepts this
-    errorIds,
+    error_ids: errorIds.filter(Boolean),
+    trace_ids: traceIds.filter(Boolean),
     tags: {
       replayId: session.id,
       segmentId: session.segmentId++,

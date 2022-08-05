@@ -112,7 +112,12 @@ export class SentryReplay implements Integration {
   /**
    * List of error events that should be associated with the replay
    */
-  errorIds: string[] = [];
+  errorIds: Set<string> = new Set();
+
+  /**
+   * List of trace ids that should be associated with the replay
+   */
+  traceIds: Set<string> = new Set();
 
   session: Session | undefined;
 
@@ -399,11 +404,12 @@ export class SentryReplay implements Integration {
     event.tags = { ...event.tags, replayId: this.session.id };
 
     if (event.type === 'transaction') {
+      this.traceIds.add(String(event.contexts?.trace.trace_id || ''));
       return event;
     }
 
     // XXX: Is it safe to assume that all other events are error events?
-    this.errorIds.push(event.event_id);
+    this.errorIds.add(event.event_id);
 
     // Need to be very careful that this does not cause an infinite loop
     if (this.options.captureOnlyOnError && event.exception) {
@@ -773,9 +779,15 @@ export class SentryReplay implements Integration {
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
       // This event needs to exist before calling `sendReplay`
-      captureReplay({ session: this.session, initialState: this.initialState, errorIds: this.errorIds});
+      captureReplay({
+        session: this.session,
+        initialState: this.initialState,
+        errorIds: Array.from(this.errorIds),
+        traceIds: Array.from(this.traceIds),
+      });
       this.needsCaptureReplay = false;
-      this.errorIds = [];
+      this.errorIds.clear();
+      this.traceIds.clear();
     }
 
     // Reset this to null regardless of `sendReplay` result so that future
@@ -797,8 +809,14 @@ export class SentryReplay implements Integration {
       // occurs.
       this.updateLastActivity(timestamp);
 
-      captureReplayUpdate({ session: this.session, timestamp, errorIds: this.errorIds });
-      this.errorIds = [];
+      captureReplayUpdate({
+        session: this.session,
+        timestamp,
+        errorIds: Array.from(this.errorIds),
+        traceIds: Array.from(this.traceIds),
+      });
+      this.errorIds.clear();
+      this.traceIds.clear();
     } catch (err) {
       console.error(err);
     }

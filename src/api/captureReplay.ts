@@ -8,12 +8,14 @@ interface CaptureReplayParams {
   session: Session;
   initialState: InitialState;
   errorIds: string[];
+  traceIds: string[];
 }
 
 export function captureReplay({
   session,
   initialState,
   errorIds,
+  traceIds,
 }: CaptureReplayParams) {
   captureEvent(
     {
@@ -21,7 +23,8 @@ export function captureReplay({
       tags: { segmentId: session.segmentId, url: initialState.url },
       timestamp: initialState.timestamp / 1000,
       // @ts-expect-error replay event type accepts this
-      errorIds,
+      error_ids: errorIds.filter(Boolean),
+      trace_ids: traceIds.filter(Boolean),
     },
     { event_id: session.id }
   );
