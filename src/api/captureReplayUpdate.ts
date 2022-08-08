@@ -23,8 +23,8 @@ export function captureReplayUpdate({
     timestamp: timestamp / 1000,
     message: `${REPLAY_EVENT_NAME}-${uuid4().substring(16)}`,
     // @ts-expect-error replay event type accepts this
-    error_ids: errorIds.filter(Boolean),
-    trace_ids: traceIds.filter(Boolean),
+    error_ids: errorIds,
+    trace_ids: traceIds,
     tags: {
       replayId: session.id,
       segmentId: session.segmentId++,

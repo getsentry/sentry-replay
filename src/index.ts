@@ -755,8 +755,8 @@ export class SentryReplay implements Integration {
       session: this.session,
       initialState: this.initialState,
       timestamp,
-      errorIds: Array.from(this.contexts.errorIds),
-      traceIds: Array.from(this.contexts.traceIds),
+      errorIds: Array.from(this.contexts.errorIds).filter(Boolean),
+      traceIds: Array.from(this.contexts.traceIds).filter(Boolean),
     };
 
     this.contexts.errorIds.clear();
