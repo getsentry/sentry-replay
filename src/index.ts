@@ -30,6 +30,7 @@ import type {
   InstrumentationType,
   RecordingConfig,
   RecordingEvent,
+  ReplayEventContext,
   ReplayRequest,
   ReplaySpan,
   SentryReplayConfiguration,
@@ -109,15 +110,10 @@ export class SentryReplay implements Integration {
    */
   private initialState: InitialState;
 
-  /**
-   * List of error events that should be associated with the replay
-   */
-  errorIds: Set<string> = new Set();
-
-  /**
-   * List of trace ids that should be associated with the replay
-   */
-  traceIds: Set<string> = new Set();
+  contexts: ReplayEventContext = {
+    errorIds: new Set(),
+    traceIds: new Set(),
+  };
 
   session: Session | undefined;
 
@@ -404,12 +400,12 @@ export class SentryReplay implements Integration {
     event.tags = { ...event.tags, replayId: this.session.id };
 
     if (event.type === 'transaction') {
-      this.traceIds.add(String(event.contexts?.trace.trace_id || ''));
+      this.contexts.traceIds.add(String(event.contexts?.trace.trace_id || ''));
       return event;
     }
 
     // XXX: Is it safe to assume that all other events are error events?
-    this.errorIds.add(event.event_id);
+    this.contexts.errorIds.add(event.event_id);
 
     // Need to be very careful that this does not cause an infinite loop
     if (this.options.captureOnlyOnError && event.exception) {
@@ -752,6 +748,24 @@ export class SentryReplay implements Integration {
   }
 
   /**
+   * Return and clear contexts
+   */
+  popContexts({ timestamp }: { timestamp: number }) {
+    const contexts = {
+      session: this.session,
+      initialState: this.initialState,
+      timestamp,
+      errorIds: Array.from(this.contexts.errorIds),
+      traceIds: Array.from(this.contexts.traceIds),
+    };
+
+    this.contexts.errorIds.clear();
+    this.contexts.traceIds.clear();
+
+    return contexts;
+  }
+
+  /**
    * Flushes replay event buffer to Sentry.
    *
    * Performance events are only added right before flushing - this is probably
@@ -776,18 +790,15 @@ export class SentryReplay implements Integration {
       return;
     }
 
+    // Save the timestamp before sending replay because `captureEvent` should
+    // only be called after successfully uploading a replay
+    const timestamp = lastActivity ?? new Date().getTime();
+
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
       // This event needs to exist before calling `sendReplay`
-      captureReplay({
-        session: this.session,
-        initialState: this.initialState,
-        errorIds: Array.from(this.errorIds),
-        traceIds: Array.from(this.traceIds),
-      });
+      captureReplay(this.popContexts({ timestamp }));
       this.needsCaptureReplay = false;
-      this.errorIds.clear();
-      this.traceIds.clear();
     }
 
     // Reset this to null regardless of `sendReplay` result so that future
@@ -795,9 +806,6 @@ export class SentryReplay implements Integration {
     this.initialEventTimestampSinceFlush = null;
 
     try {
-      // Save the timestamp before sending replay because `captureEvent` should
-      // only be called after successfully uploading a replay
-      const timestamp = lastActivity ?? new Date().getTime();
       const recordingData = await this.eventBuffer.finish();
       await this.sendReplay(this.session.id, recordingData);
 
@@ -809,14 +817,7 @@ export class SentryReplay implements Integration {
       // occurs.
       this.updateLastActivity(timestamp);
 
-      captureReplayUpdate({
-        session: this.session,
-        timestamp,
-        errorIds: Array.from(this.errorIds),
-        traceIds: Array.from(this.traceIds),
-      });
-      this.errorIds.clear();
-      this.traceIds.clear();
+      captureReplayUpdate(this.popContexts({ timestamp }));
     } catch (err) {
       console.error(err);
     }
