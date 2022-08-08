@@ -3,8 +3,11 @@ import { Breadcrumb, DsnComponents, Event, Integration } from '@sentry/types';
 import { addInstrumentationHandler } from '@sentry/utils';
 import { EventType, record } from 'rrweb';
 
-import { captureReplay } from './api/captureReplay';
-import { captureReplayUpdate } from './api/captureReplayUpdate';
+import { captureReplay, CaptureReplayParams } from './api/captureReplay';
+import {
+  captureReplayUpdate,
+  CaptureReplayUpdateParams,
+} from './api/captureReplayUpdate';
 import {
   REPLAY_EVENT_NAME,
   ROOT_REPLAY_NAME,
@@ -110,7 +113,7 @@ export class SentryReplay implements Integration {
    */
   private initialState: InitialState;
 
-  contexts: ReplayEventContext = {
+  private contexts: ReplayEventContext = {
     errorIds: new Set(),
     traceIds: new Set(),
   };
@@ -750,7 +753,11 @@ export class SentryReplay implements Integration {
   /**
    * Return and clear contexts
    */
-  popContexts({ timestamp }: { timestamp: number }) {
+  popContexts({
+    timestamp,
+  }: {
+    timestamp: number;
+  }): CaptureReplayParams & CaptureReplayUpdateParams {
     const contexts = {
       session: this.session,
       initialState: this.initialState,

@@ -4,7 +4,7 @@ import { ROOT_REPLAY_NAME } from '@/session/constants';
 import type { Session } from '@/session/Session';
 import { InitialState } from '@/types';
 
-interface CaptureReplayParams {
+export interface CaptureReplayParams {
   session: Session;
   initialState: InitialState;
   errorIds: string[];

@@ -4,7 +4,7 @@ import { uuid4 } from '@sentry/utils';
 import { REPLAY_EVENT_NAME } from '@/session/constants';
 import type { Session } from '@/session/Session';
 
-interface CaptureReplayUpdateParams {
+export interface CaptureReplayUpdateParams {
   session: Session;
   /**
    * Timestamp of the event in milliseconds
