@@ -224,6 +224,8 @@ export class SentryReplay implements Integration {
       timestamp: new Date().getTime(),
       url: `${window.location.origin}${window.location.pathname}`,
     };
+
+    this.context.urls.add(window.location.pathname);
   }
 
   /**
