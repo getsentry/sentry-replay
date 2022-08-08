@@ -2,6 +2,7 @@ import { ReplayPerformanceEntry } from '@/createPerformanceEntry';
 import { isIngestHost } from '@/util/isIngestHost';
 
 // From sentry-javascript
+// e.g. https://github.com/getsentry/sentry-javascript/blob/c7fc025bf9fa8c073fdb56351808ce53909fbe45/packages/utils/src/instrument.ts#L180
 type XHRSendInput =
   | null
   | Blob
@@ -9,6 +10,7 @@ type XHRSendInput =
   | FormData
   | URLSearchParams
   | string;
+
 interface SentryWrappedXMLHttpRequest extends XMLHttpRequest {
   [key: string]: any;
   __sentry_xhr__?: {
@@ -18,6 +20,9 @@ interface SentryWrappedXMLHttpRequest extends XMLHttpRequest {
     body?: XHRSendInput;
     startTimestamp?: number; // This is unique to replay SDK
   };
+  // If Sentry key appears in request, don't capture as request
+  // See https://github.com/getsentry/sentry-javascript/blob/c7fc025bf9fa8c073fdb56351808ce53909fbe45/packages/utils/src/instrument.ts#L236
+  __sentry_own_request__?: boolean;
 }
 
 interface XhrHandlerData {
