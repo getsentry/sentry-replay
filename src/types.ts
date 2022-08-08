@@ -9,15 +9,14 @@ export interface ReplayRequest {
   events: Uint8Array | string;
 }
 
+export type InstrumentationTypeBreadcrumb = 'dom' | 'scope';
+export type InstrumentationTypeSpan = 'fetch' | 'xhr' | 'history';
 export type InstrumentationType =
+  | InstrumentationTypeBreadcrumb
+  | InstrumentationTypeSpan
   | 'console'
-  | 'dom'
   | 'error'
-  | 'fetch'
-  | 'history'
-  | 'scope'
-  | 'unhandledrejection'
-  | 'xhr';
+  | 'unhandledrejection';
 
 /**
  * The request payload to worker

@@ -8,6 +8,8 @@ import {
   captureReplayUpdate,
   CaptureReplayUpdateParams,
 } from './api/captureReplayUpdate';
+import { getBreadcrumbHandler } from './coreHandlers/getBreadcrumbHandler';
+import { getSpanHandler } from './coreHandlers/getSpanHandler';
 import {
   REPLAY_EVENT_NAME,
   ROOT_REPLAY_NAME,
@@ -22,13 +24,6 @@ import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 import { supportsSendBeacon } from './util/supportsSendBeacon';
 import {
-  handleDom,
-  handleFetch,
-  handleHistory,
-  handleScope,
-  handleXhr,
-} from './coreHandlers';
-import {
   createMemoryEntry,
   createPerformanceEntries,
   ReplayPerformanceEntry,
@@ -36,7 +31,8 @@ import {
 import { createEventBuffer, IEventBuffer } from './eventBuffer';
 import type {
   InitialState,
-  InstrumentationType,
+  InstrumentationTypeBreadcrumb,
+  InstrumentationTypeSpan,
   RecordingConfig,
   RecordingEvent,
   ReplayEventContext,
@@ -341,11 +337,14 @@ export class SentryReplay implements Integration {
 
     // Listeners from core SDK //
     const scope = getCurrentHub().getScope();
-    scope.addScopeListener(this.handleCoreListener('scope'));
-    addInstrumentationHandler('dom', this.handleCoreListener('dom'));
-    addInstrumentationHandler('fetch', this.handleCoreListener('fetch'));
-    addInstrumentationHandler('xhr', this.handleCoreListener('xhr'));
-    addInstrumentationHandler('history', this.handleCoreListener('history'));
+    scope.addScopeListener(this.handleCoreBreadcrumbListener('scope'));
+    addInstrumentationHandler('dom', this.handleCoreBreadcrumbListener('dom'));
+    addInstrumentationHandler('fetch', this.handleCoreSpanListener('fetch'));
+    addInstrumentationHandler('xhr', this.handleCoreSpanListener('xhr'));
+    addInstrumentationHandler(
+      'history',
+      this.handleCoreSpanListener('history')
+    );
 
     // PerformanceObserver //
     if (!('PerformanceObserver' in window)) {
@@ -524,49 +523,21 @@ export class SentryReplay implements Integration {
     this.destroy();
   };
 
-  getHandler(type: InstrumentationType) {
-    switch (type) {
-      case 'scope':
-        return { handler: handleScope, eventType: 'breadcrumb' };
-      case 'dom':
-        return { handler: handleDom, eventType: 'breadcrumb' };
-      case 'fetch':
-        return { handler: handleFetch, eventType: 'span' };
-      case 'xhr':
-        return { handler: handleXhr, eventType: 'span' };
-      case 'history':
-        return { handler: handleHistory, eventType: 'span' };
-      default:
-        throw new Error(`No handler defined for type: ${type}`);
-    }
-  }
-
   /**
    * Handler for Sentry Core SDK events.
    *
-   * Transforms core SDK events into replay events.
+   * These specific events will create span-like objects in the recording.
    *
    */
-  handleCoreListener = (type: InstrumentationType) => (handlerData: any) => {
-    const handlerResult = this.getHandler(type);
+  handleCoreSpanListener =
+    (type: InstrumentationTypeSpan) => (handlerData: any) => {
+      const handler = getSpanHandler(type);
+      const result = handler(handlerData);
 
-    const { handler, eventType } = handlerResult;
-    const result = handler(handlerData);
+      if (result === null) {
+        return;
+      }
 
-    if (result === null) {
-      return;
-    }
-
-    const isBreadcrumbType = (
-      _result: Breadcrumb | ReplayPerformanceEntry
-    ): _result is Breadcrumb => {
-      return ['scope', 'dom'].includes(type);
-    };
-
-    const resultBreadcrumb = isBreadcrumbType(result);
-
-    // fetch/xhr
-    if (!resultBreadcrumb) {
       if (type === 'history') {
         // Need to collect visited URLs
         this.context.urls.push(result.name);
@@ -575,26 +546,39 @@ export class SentryReplay implements Integration {
       this.addUpdate(() => {
         this.createPerformanceSpans([result as ReplayPerformanceEntry]);
       });
-      return;
-    }
+    };
 
-    if (['sentry.transaction'].includes(result.category)) {
-      return;
-    }
+  /**
+   * Handler for Sentry Core SDK events.
+   *
+   * These events will create breadcrumb-like objects in the recording.
+   */
+  handleCoreBreadcrumbListener =
+    (type: InstrumentationTypeBreadcrumb) => (handlerData: any) => {
+      const handler = getBreadcrumbHandler(type);
+      const result = handler(handlerData);
 
-    this.addUpdate(() => {
-      this.eventBuffer.addEvent({
-        type: EventType.Custom,
-        // TODO: We were converting from ms to seconds for breadcrumbs, spans,
-        // but maybe we should just keep them as milliseconds
-        timestamp: result.timestamp * 1000,
-        data: {
-          tag: eventType,
-          payload: result,
-        },
+      if (result === null) {
+        return;
+      }
+
+      if (['sentry.transaction'].includes(result.category)) {
+        return;
+      }
+
+      this.addUpdate(() => {
+        this.eventBuffer.addEvent({
+          type: EventType.Custom,
+          // TODO: We were converting from ms to seconds for breadcrumbs, spans,
+          // but maybe we should just keep them as milliseconds
+          timestamp: result.timestamp * 1000,
+          data: {
+            tag: 'breadcrumb',
+            payload: result,
+          },
+        });
       });
-    });
-  };
+    };
 
   /**
    * Keep a list of performance entries that will be sent with a replay
