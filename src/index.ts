@@ -116,7 +116,7 @@ export class SentryReplay implements Integration {
   private context: ReplayEventContext = {
     errorIds: new Set(),
     traceIds: new Set(),
-    urls: new Set(),
+    urls: [],
   };
 
   session: Session | undefined;
@@ -227,7 +227,7 @@ export class SentryReplay implements Integration {
       url: `${window.location.origin}${urlPath}`,
     };
 
-    this.context.urls.add(urlPath);
+    this.context.urls.push(urlPath);
   }
 
   /**
@@ -569,7 +569,7 @@ export class SentryReplay implements Integration {
     if (!resultBreadcrumb) {
       if (type === 'history') {
         // Need to collect visited URLs
-        this.context.urls.add(result.name);
+        this.context.urls.push(result.name);
       }
 
       this.addUpdate(() => {
@@ -790,11 +790,12 @@ export class SentryReplay implements Integration {
       timestamp,
       errorIds: Array.from(this.context.errorIds).filter(Boolean),
       traceIds: Array.from(this.context.traceIds).filter(Boolean),
+      urls: this.context.urls,
     };
 
     this.context.errorIds.clear();
     this.context.traceIds.clear();
-    this.context.urls.clear();
+    this.context.urls = [];
 
     return context;
   }

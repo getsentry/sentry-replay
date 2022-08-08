@@ -107,7 +107,7 @@ export interface ReplayEventContext {
   traceIds: Set<string>;
 
   /**
-   * Set of URLs that the history has navigated to 
-  */
-  urls: Set<string>;
+   * Ordered list of URLs that have been visited during a replay segment
+   */
+  urls: string[];
 }
