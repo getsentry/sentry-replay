@@ -218,14 +218,16 @@ export class SentryReplay implements Integration {
       emit: this.handleRecordingEmit,
     });
 
+    const urlPath = `${window.location.pathname}${window.location.hash}${window.location.search}`;
+
     // Otherwise, these will be captured after the first flush, which means the
     // URL and timestamps could be incorrect
     this.initialState = {
       timestamp: new Date().getTime(),
-      url: `${window.location.origin}${window.location.pathname}`,
+      url: `${window.location.origin}${urlPath}`,
     };
 
-    this.context.urls.add(window.location.pathname);
+    this.context.urls.add(urlPath);
   }
 
   /**
