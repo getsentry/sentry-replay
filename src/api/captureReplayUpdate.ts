@@ -29,9 +29,5 @@ export function captureReplayUpdate({
     urls,
     replay_id: session.id,
     segment_id: ++session.segmentId,
-    tags: {
-      replayId: session.id,
-      segmentId: session.segmentId++,
-    },
   });
 }
