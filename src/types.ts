@@ -6,20 +6,19 @@ export type RecordingConfig = Parameters<typeof record>[0];
 
 export type RecordedEvents = Uint8Array | string;
 
-export interface ReplaySpan {
-  description: string;
-  op: string;
-  startTimestamp: number;
-  endTimestamp: number;
-  data?: Record<string, unknown>;
-}
-
 export interface ReplayRequest {
   endpoint: string;
   events: RecordedEvents;
 }
 
-export type InstrumentationType = 'scope' | 'dom' | 'fetch' | 'xhr';
+export type InstrumentationTypeBreadcrumb = 'dom' | 'scope';
+export type InstrumentationTypeSpan = 'fetch' | 'xhr' | 'history';
+export type InstrumentationType =
+  | InstrumentationTypeBreadcrumb
+  | InstrumentationTypeSpan
+  | 'console'
+  | 'error'
+  | 'unhandledrejection';
 
 /**
  * The request payload to worker
@@ -107,4 +106,9 @@ export interface ReplayEventContext {
    * Set of Sentry trace ids that have occurred during a replay segment
    */
   traceIds: Set<string>;
+
+  /**
+   * Ordered list of URLs that have been visited during a replay segment
+   */
+  urls: string[];
 }

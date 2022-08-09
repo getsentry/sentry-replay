@@ -10,6 +10,8 @@ import {
   captureReplayUpdate,
   CaptureReplayUpdateParams,
 } from './api/captureReplayUpdate';
+import { getBreadcrumbHandler } from './coreHandlers/getBreadcrumbHandler';
+import { getSpanHandler } from './coreHandlers/getSpanHandler';
 import {
   REPLAY_EVENT_NAME,
   SESSION_IDLE_DURATION,
@@ -23,7 +25,6 @@ import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 import { supportsSendBeacon } from './util/supportsSendBeacon';
-import { handleDom, handleFetch, handleScope, handleXhr } from './coreHandlers';
 import {
   createMemoryEntry,
   createPerformanceEntries,
@@ -32,13 +33,13 @@ import {
 import { createEventBuffer, IEventBuffer } from './eventBuffer';
 import type {
   InitialState,
-  InstrumentationType,
+  InstrumentationTypeBreadcrumb,
+  InstrumentationTypeSpan,
   RecordedEvents,
   RecordingConfig,
   RecordingEvent,
   ReplayEventContext,
   ReplayRequest,
-  ReplaySpan,
   SentryReplayConfiguration,
   SentryReplayPluginOptions,
 } from './types';
@@ -68,11 +69,6 @@ export class SentryReplay implements Integration {
    * Buffer of breadcrumbs to be uploaded
    */
   public breadcrumbs: Breadcrumb[] = [];
-
-  /**
-   * Buffer of replay spans to be uploaded
-   */
-  public replaySpans: ReplaySpan[] = [];
 
   /**
    * List of PerformanceEntry from PerformanceObserver
@@ -116,9 +112,10 @@ export class SentryReplay implements Integration {
    */
   private initialState: InitialState;
 
-  private contexts: ReplayEventContext = {
+  private context: ReplayEventContext = {
     errorIds: new Set(),
     traceIds: new Set(),
+    urls: [],
   };
 
   session: Session | undefined;
@@ -211,12 +208,16 @@ export class SentryReplay implements Integration {
       emit: this.handleRecordingEmit,
     });
 
+    const urlPath = `${window.location.pathname}${window.location.hash}${window.location.search}`;
+
     // Otherwise, these will be captured after the first flush, which means the
     // URL and timestamps could be incorrect
     this.initialState = {
       timestamp: new Date().getTime(),
-      url: `${window.location.origin}${window.location.pathname}`,
+      url: `${window.location.origin}${urlPath}`,
     };
+
+    this.context.urls.push(urlPath);
   }
 
   /**
@@ -329,10 +330,14 @@ export class SentryReplay implements Integration {
 
     // Listeners from core SDK //
     const scope = getCurrentHub().getScope();
-    scope.addScopeListener(this.handleCoreListener('scope'));
-    addInstrumentationHandler('dom', this.handleCoreListener('dom'));
-    addInstrumentationHandler('fetch', this.handleCoreListener('fetch'));
-    addInstrumentationHandler('xhr', this.handleCoreListener('xhr'));
+    scope.addScopeListener(this.handleCoreBreadcrumbListener('scope'));
+    addInstrumentationHandler('dom', this.handleCoreBreadcrumbListener('dom'));
+    addInstrumentationHandler('fetch', this.handleCoreSpanListener('fetch'));
+    addInstrumentationHandler('xhr', this.handleCoreSpanListener('xhr'));
+    addInstrumentationHandler(
+      'history',
+      this.handleCoreSpanListener('history')
+    );
 
     // PerformanceObserver //
     if (!('PerformanceObserver' in window)) {
@@ -400,12 +405,12 @@ export class SentryReplay implements Integration {
     event.tags = { ...event.tags, replayId: this.session.id };
 
     if (event.type === 'transaction') {
-      this.contexts.traceIds.add(String(event.contexts?.trace.trace_id || ''));
+      this.context.traceIds.add(String(event.contexts?.trace.trace_id || ''));
       return event;
     }
 
     // XXX: Is it safe to assume that all other events are error events?
-    this.contexts.errorIds.add(event.event_id);
+    this.context.errorIds.add(event.event_id);
 
     // Need to be very careful that this does not cause an infinite loop
     if (this.options.captureOnlyOnError && event.exception) {
@@ -516,42 +521,46 @@ export class SentryReplay implements Integration {
   /**
    * Handler for Sentry Core SDK events.
    *
-   * Transforms core SDK events into replay events.
+   * These specific events will create span-like objects in the recording.
    *
    */
-  handleCoreListener = (type: InstrumentationType) => (handlerData: any) => {
-    const handlerMap: Record<
-      InstrumentationType,
-      [
-        handler: InstrumentationType extends 'fetch' | 'xhr'
-          ? (handlerData: any) => ReplayPerformanceEntry
-          : (handlerData: any) => Breadcrumb,
-        eventType: string
-      ]
-    > = {
-      scope: [handleScope, 'breadcrumb'],
-      dom: [handleDom, 'breadcrumb'],
-      fetch: [handleFetch, 'span'],
-      xhr: [handleXhr, 'span'],
+  handleCoreSpanListener =
+    (type: InstrumentationTypeSpan) => (handlerData: any) => {
+      const handler = getSpanHandler(type);
+      const result = handler(handlerData);
+
+      if (result === null) {
+        return;
+      }
+
+      if (type === 'history') {
+        // Need to collect visited URLs
+        this.context.urls.push(result.name);
+      }
+
+      this.addUpdate(() => {
+        this.createPerformanceSpans([result as ReplayPerformanceEntry]);
+      });
     };
 
-    if (!(type in handlerMap)) {
-      throw new Error(`No handler defined for type: ${type}`);
-    }
+  /**
+   * Handler for Sentry Core SDK events.
+   *
+   * These events will create breadcrumb-like objects in the recording.
+   */
+  handleCoreBreadcrumbListener =
+    (type: InstrumentationTypeBreadcrumb) => (handlerData: any) => {
+      const handler = getBreadcrumbHandler(type);
+      const result = handler(handlerData);
 
-    const [handlerFn, eventType] = handlerMap[type];
+      if (result === null) {
+        return;
+      }
 
-    const result = handlerFn(handlerData);
+      if (['sentry.transaction'].includes(result.category)) {
+        return;
+      }
 
-    if (result === null) {
-      return;
-    }
-
-    if (['sentry.transaction'].includes(result.category)) {
-      return;
-    }
-
-    if (['scope', 'dom'].includes(type)) {
       this.addUpdate(() => {
         this.eventBuffer.addEvent({
           type: EventType.Custom,
@@ -559,19 +568,12 @@ export class SentryReplay implements Integration {
           // but maybe we should just keep them as milliseconds
           timestamp: result.timestamp * 1000,
           data: {
-            tag: eventType,
+            tag: 'breadcrumb',
             payload: result,
           },
         });
       });
-      return;
-    }
-
-    // fetch/xhr
-    this.addUpdate(() => {
-      this.createPerformanceSpans([result as ReplayPerformanceEntry]);
-    });
-  };
+    };
 
   /**
    * Keep a list of performance entries that will be sent with a replay
@@ -754,25 +756,27 @@ export class SentryReplay implements Integration {
   }
 
   /**
-   * Return and clear contexts
+   * Return and clear context
    */
-  popContexts({
+  popEventContext({
     timestamp,
   }: {
     timestamp: number;
   }): CaptureReplayParams & CaptureReplayUpdateParams {
-    const contexts = {
+    const context = {
       session: this.session,
       initialState: this.initialState,
       timestamp,
-      errorIds: Array.from(this.contexts.errorIds).filter(Boolean),
-      traceIds: Array.from(this.contexts.traceIds).filter(Boolean),
+      errorIds: Array.from(this.context.errorIds).filter(Boolean),
+      traceIds: Array.from(this.context.traceIds).filter(Boolean),
+      urls: this.context.urls,
     };
 
-    this.contexts.errorIds.clear();
-    this.contexts.traceIds.clear();
+    this.context.errorIds.clear();
+    this.context.traceIds.clear();
+    this.context.urls = [];
 
-    return contexts;
+    return context;
   }
 
   /**
@@ -807,7 +811,7 @@ export class SentryReplay implements Integration {
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
       // This event needs to exist before calling `sendReplay`
-      captureReplay(this.popContexts({ timestamp }));
+      captureReplay(this.popEventContext({ timestamp }));
       this.needsCaptureReplay = false;
     }
 
@@ -827,7 +831,7 @@ export class SentryReplay implements Integration {
       // occurs.
       this.updateLastActivity(timestamp);
 
-      captureReplayUpdate(this.popContexts({ timestamp }));
+      captureReplayUpdate(this.popEventContext({ timestamp }));
     } catch (err) {
       console.error(err);
     }

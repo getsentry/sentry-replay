@@ -9,6 +9,7 @@ export interface CaptureReplayParams {
   initialState: InitialState;
   errorIds: string[];
   traceIds: string[];
+  urls: string[];
 }
 
 export function captureReplay({
@@ -16,6 +17,7 @@ export function captureReplay({
   initialState,
   errorIds,
   traceIds,
+  urls,
 }: CaptureReplayParams) {
   captureEvent(
     {
@@ -24,6 +26,7 @@ export function captureReplay({
       replay_start_timestamp: initialState.timestamp / 1000,
       error_ids: errorIds,
       trace_ids: traceIds,
+      urls,
       replay_id: session.id,
       segment_id: session.segmentId, // TODO: Should this increment?
       tags: { url: initialState.url },
