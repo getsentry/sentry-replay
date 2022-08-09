@@ -259,14 +259,31 @@ describe('SentryReplay (capture only on error)', () => {
           url: 'http://localhost/',
         },
         errorIds: [expect.any(String)],
+        traceIds: [],
       })
     );
 
     expect(captureEventMock).toHaveBeenCalledTimes(2);
+
+    // Replay root
+    expect(captureEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'sentry-replay',
+        error_ids: [expect.any(String)],
+        trace_ids: [],
+      }),
+      { event_id: expect.any(String) }
+    );
+
+    // Replay Update
     expect(captureEventMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        timestamp: expect.closeTo((BASE_TIMESTAMP + 5000) / 1000, 1), // the exception happened roughly 5 seconds after BASE_TIMESTAMP
-        errorIds: [],
+        // the exception happened roughly 5 seconds after BASE_TIMESTAMP (i.e. 5
+        // seconds after root replay event). extra time is likely due to async
+        // of `addMemoryEntry()`
+        timestamp: expect.closeTo((BASE_TIMESTAMP + 5000) / 1000, 1),
+        error_ids: [],
+        trace_ids: [],
       })
     );
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));

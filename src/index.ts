@@ -7,8 +7,11 @@ import { Breadcrumb, DsnComponents, Event, Integration } from '@sentry/types';
 import { addInstrumentationHandler } from '@sentry/utils';
 import { EventType, record } from 'rrweb';
 
-import { captureReplay } from './api/captureReplay';
-import { captureReplayUpdate } from './api/captureReplayUpdate';
+import { captureReplay, CaptureReplayParams } from './api/captureReplay';
+import {
+  captureReplayUpdate,
+  CaptureReplayUpdateParams,
+} from './api/captureReplayUpdate';
 import {
   REPLAY_EVENT_NAME,
   ROOT_REPLAY_NAME,
@@ -34,6 +37,7 @@ import type {
   InstrumentationType,
   RecordingConfig,
   RecordingEvent,
+  ReplayEventContext,
   ReplayRequest,
   ReplaySpan,
   SentryReplayConfiguration,
@@ -113,10 +117,10 @@ export class SentryReplay implements Integration {
    */
   private initialState: InitialState;
 
-  /**
-   * List of error events that should be associated with the replay
-   */
-  errorIds: string[] = [];
+  private contexts: ReplayEventContext = {
+    errorIds: new Set(),
+    traceIds: new Set(),
+  };
 
   session: Session | undefined;
 
@@ -338,6 +342,8 @@ export class SentryReplay implements Integration {
     const scope = getCurrentHub().getScope();
     scope.addScopeListener(this.handleCoreListener('scope'));
     addInstrumentationHandler('dom', this.handleCoreListener('dom'));
+    addInstrumentationHandler('fetch', this.handleCoreListener('fetch'));
+    addInstrumentationHandler('xhr', this.handleCoreListener('xhr'));
 
     // PerformanceObserver //
     if (!('PerformanceObserver' in window)) {
@@ -403,11 +409,12 @@ export class SentryReplay implements Integration {
     event.tags = { ...event.tags, replayId: this.session.id };
 
     if (event.type === 'transaction') {
+      this.contexts.traceIds.add(String(event.contexts?.trace.trace_id || ''));
       return event;
     }
 
     // XXX: Is it safe to assume that all other events are error events?
-    this.errorIds.push(event.event_id);
+    this.contexts.errorIds.add(event.event_id);
 
     // Need to be very careful that this does not cause an infinite loop
     if (this.options.captureOnlyOnError && event.exception) {
@@ -526,7 +533,7 @@ export class SentryReplay implements Integration {
       InstrumentationType,
       [
         handler: InstrumentationType extends 'fetch' | 'xhr'
-          ? (handlerData: any) => ReplaySpan
+          ? (handlerData: any) => ReplayPerformanceEntry
           : (handlerData: any) => Breadcrumb,
         eventType: string
       ]
@@ -553,19 +560,25 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    this.addUpdate(() => {
-      this.eventBuffer.addEvent({
-        type: EventType.Custom,
-        // TODO: We were converting from ms to seconds for breadcrumbs, spans,
-        // but maybe we should just keep them as milliseconds
-        timestamp:
-          (result as Breadcrumb).timestamp * 1000 ||
-          (result as ReplaySpan).startTimestamp * 1000,
-        data: {
-          tag: eventType,
-          payload: result,
-        },
+    if (['scope', 'dom'].includes(type)) {
+      this.addUpdate(() => {
+        this.eventBuffer.addEvent({
+          type: EventType.Custom,
+          // TODO: We were converting from ms to seconds for breadcrumbs, spans,
+          // but maybe we should just keep them as milliseconds
+          timestamp: result.timestamp * 1000,
+          data: {
+            tag: eventType,
+            payload: result,
+          },
+        });
       });
+      return;
+    }
+
+    // fetch/xhr
+    this.addUpdate(() => {
+      this.createPerformanceSpans([result as ReplayPerformanceEntry]);
     });
   };
 
@@ -760,6 +773,28 @@ export class SentryReplay implements Integration {
   }
 
   /**
+   * Return and clear contexts
+   */
+  popContexts({
+    timestamp,
+  }: {
+    timestamp: number;
+  }): CaptureReplayParams & CaptureReplayUpdateParams {
+    const contexts = {
+      session: this.session,
+      initialState: this.initialState,
+      timestamp,
+      errorIds: Array.from(this.contexts.errorIds).filter(Boolean),
+      traceIds: Array.from(this.contexts.traceIds).filter(Boolean),
+    };
+
+    this.contexts.errorIds.clear();
+    this.contexts.traceIds.clear();
+
+    return contexts;
+  }
+
+  /**
    * Flushes replay event buffer to Sentry.
    *
    * Performance events are only added right before flushing - this is probably
@@ -790,16 +825,15 @@ export class SentryReplay implements Integration {
     // Only attach memory event if eventBuffer is not empty
     await this.addMemoryEntry();
 
+    // Save the timestamp before sending replay because `captureEvent` should
+    // only be called after successfully uploading a replay
+    const timestamp = lastActivity ?? new Date().getTime();
+
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
       // This event needs to exist before calling `sendReplay`
-      captureReplay({
-        session: this.session,
-        initialState: this.initialState,
-        errorIds: this.errorIds,
-      });
+      captureReplay(this.popContexts({ timestamp }));
       this.needsCaptureReplay = false;
-      this.errorIds = [];
     }
 
     // Reset this to null regardless of `sendReplay` result so that future
@@ -807,9 +841,6 @@ export class SentryReplay implements Integration {
     this.initialEventTimestampSinceFlush = null;
 
     try {
-      // Save the timestamp before sending replay because `captureEvent` should
-      // only be called after successfully uploading a replay
-      const timestamp = lastActivity ?? new Date().getTime();
       const recordingData = await this.eventBuffer.finish();
       await this.sendReplay(this.session.id, recordingData);
 
@@ -821,12 +852,7 @@ export class SentryReplay implements Integration {
       // occurs.
       this.updateLastActivity(timestamp);
 
-      captureReplayUpdate({
-        session: this.session,
-        timestamp,
-        errorIds: this.errorIds,
-      });
-      this.errorIds = [];
+      captureReplayUpdate(this.popContexts({ timestamp }));
     } catch (err) {
       captureException(err);
       console.error(err);
