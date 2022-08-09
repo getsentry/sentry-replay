@@ -11,7 +11,6 @@ import {
   CaptureReplayUpdateParams,
 } from './api/captureReplayUpdate';
 import {
-  RECORDING_EVENT_NAME,
   REPLAY_EVENT_NAME,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
@@ -391,10 +390,10 @@ export class SentryReplay implements Integration {
     // Do not apply replayId to the root event
     if (
       // @ts-expect-error new event type
-      event.type === REPLAY_EVENT_NAME ||
-      // @ts-expect-error new event type
-      event.type === RECORDING_EVENT_NAME
+      event.type === REPLAY_EVENT_NAME
     ) {
+      // Clean up the replay event a bit;
+      delete event.breadcrumbs;
       return event;
     }
 
