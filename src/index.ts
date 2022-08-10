@@ -562,7 +562,7 @@ export class SentryReplay implements Integration {
         return;
       }
 
-      if (['sentry.transaction'].includes(result.category)) {
+      if (result.category === 'sentry.transaction') {
         return;
       }
 
