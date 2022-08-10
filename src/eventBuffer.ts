@@ -145,7 +145,7 @@ export class EventBufferCompressionWorker implements IEventBuffer {
 
   /**
    * Note that this may not reflect what is actually in the event buffer. This
-   * is only a local count of the buffer size sincce `addEvent` is async.
+   * is only a local count of the buffer size since `addEvent` is async.
    */
   get length() {
     return this.eventBufferItemLength;
