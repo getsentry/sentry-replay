@@ -29,7 +29,6 @@ export function captureReplay({
       urls,
       replay_id: session.id,
       segment_id: session.segmentId, // TODO: Should this increment?
-      tags: { url: initialState.url },
     },
     { event_id: session.id }
   );

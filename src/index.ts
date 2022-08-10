@@ -209,15 +209,16 @@ export class SentryReplay implements Integration {
     });
 
     const urlPath = `${window.location.pathname}${window.location.hash}${window.location.search}`;
+    const url = `${window.location.origin}${urlPath}`;
 
     // Otherwise, these will be captured after the first flush, which means the
     // URL and timestamps could be incorrect
     this.initialState = {
       timestamp: new Date().getTime(),
-      url: `${window.location.origin}${urlPath}`,
+      url,
     };
 
-    this.context.urls.push(urlPath);
+    this.context.urls.push(url);
   }
 
   /**
@@ -557,7 +558,7 @@ export class SentryReplay implements Integration {
         return;
       }
 
-      if (['sentry.transaction'].includes(result.category)) {
+      if (result.category === 'sentry.transaction') {
         return;
       }
 
