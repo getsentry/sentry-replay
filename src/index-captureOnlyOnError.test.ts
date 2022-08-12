@@ -260,6 +260,7 @@ describe('SentryReplay (capture only on error)', () => {
         },
         errorIds: [expect.any(String)],
         traceIds: [],
+        urls: [],
       })
     );
 
@@ -271,6 +272,7 @@ describe('SentryReplay (capture only on error)', () => {
         message: 'sentry-replay',
         error_ids: [expect.any(String)],
         trace_ids: [],
+        urls: [],
       }),
       { event_id: expect.any(String) }
     );
@@ -284,6 +286,7 @@ describe('SentryReplay (capture only on error)', () => {
         timestamp: expect.closeTo((BASE_TIMESTAMP + 5000) / 1000, 1),
         error_ids: [],
         trace_ids: [],
+        urls: [],
       })
     );
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
