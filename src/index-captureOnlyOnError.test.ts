@@ -55,9 +55,12 @@ describe('SentryReplay (capture only on error)', () => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     mockSendReplayRequest.mockClear();
     mockRecord.takeFullSnapshot.mockClear();
+    captureEventMock.mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    jest.runAllTimers();
+    await new Promise(process.nextTick);
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.clearSession();
     replay.eventBuffer.destroy();
@@ -261,6 +264,8 @@ describe('SentryReplay (capture only on error)', () => {
       })
     );
 
+    expect(captureEventMock).toHaveBeenCalledTimes(2);
+
     // Replay root
     expect(captureEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -279,8 +284,12 @@ describe('SentryReplay (capture only on error)', () => {
     expect(captureEventMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         // the exception happened roughly 5 seconds after BASE_TIMESTAMP (i.e. 5
-        // seconds after root replay event)
-        replay_start_timestamp: (BASE_TIMESTAMP + 5000) / 1000,
+        // seconds after root replay event). extra time is likely due to async
+        // of `addMemoryEntry()`
+        replay_start_timestamp: expect.closeTo(
+          (BASE_TIMESTAMP + 5000) / 1000,
+          1
+        ),
         error_ids: [],
         trace_ids: [],
         urls: [],
