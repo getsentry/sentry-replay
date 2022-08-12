@@ -169,7 +169,7 @@ export class EventBufferCompressionWorker implements IEventBuffer {
     });
 
     // Worker has been re-initialized, can add event now
-    this.sendEventToWorker(event);
+    return this.sendEventToWorker(event);
   }
 
   sendEventToWorker = (event: RecordingEvent) => {
