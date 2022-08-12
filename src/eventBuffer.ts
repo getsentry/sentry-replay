@@ -151,24 +151,17 @@ export class EventBufferCompressionWorker implements IEventBuffer {
     return this.eventBufferItemLength;
   }
 
-  addEvent(event: RecordingEvent, isCheckout?: boolean) {
-    // If not a checkout, send event to worker
-    if (!isCheckout) {
-      return this.sendEventToWorker(event);
+  async addEvent(event: RecordingEvent, isCheckout?: boolean) {
+    if (isCheckout) {
+      // This event is a checkout, make sure worker buffer is cleared before
+      // proceeding.
+      await this.postMessage({
+        id: this.id,
+        method: 'init',
+        args: [],
+      });
     }
 
-    // This event is a checkout, make sure worker buffer is cleared before
-    // proceeding.
-    //
-    // XXX: There is an assumption here that init will always complete before
-    // the message in `sendEventToWorker`
-    this.postMessage({
-      id: this.id,
-      method: 'init',
-      args: [],
-    });
-
-    // Worker has been re-initialized, can add event now
     return this.sendEventToWorker(event);
   }
 
