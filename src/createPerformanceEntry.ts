@@ -96,16 +96,13 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
     name,
     responseEnd,
     startTime,
+    decodedBodySize,
+    encodedBodySize,
     transferSize,
   } = entry;
 
   // Do not capture fetches to Sentry ingestion endpoint
   if (isIngestHost(name)) {
-    return null;
-  }
-
-  // Core SDK handles these
-  if (['fetch', 'xmlhttprequest'].includes(initiatorType)) {
     return null;
   }
 
@@ -115,7 +112,9 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
     end: getAbsoluteTime(responseEnd),
     name,
     data: {
-      size: transferSize,
+      size: decodedBodySize,
+      encodedBodySize,
+      transferSize,
     },
   };
 }

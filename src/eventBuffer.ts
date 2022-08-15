@@ -166,13 +166,12 @@ export class EventBufferCompressionWorker implements IEventBuffer {
   }
 
   sendEventToWorker = (event: RecordingEvent) => {
+    // TODO: error handling when `event` is not able to be serialized
     const promise = this.postMessage({
       id: this.id,
       method: 'addEvent',
       args: [event],
     });
-
-    logger.log('Message posted to worker');
 
     // XXX: See note in `get length()`
     this.eventBufferItemLength++;

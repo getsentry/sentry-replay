@@ -25,6 +25,7 @@ import { getSession } from './session/getSession';
 import { Session } from './session/Session';
 import createBreadcrumb from './util/createBreadcrumb';
 import { createPayload } from './util/createPayload';
+import { getAdditionalRequestData } from './util/getAdditionalRequestData';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
@@ -116,6 +117,14 @@ export class SentryReplay implements Integration {
    */
   private initialState: InitialState;
 
+  /**
+   * Requests captured from core SDK. Use this to augment requests from `window.performance`
+   */
+  private coreRequests: ReplayPerformanceEntry[] = [];
+
+  /**
+   * Additional context to keep track to send with the Sentry `replay_event` event
+   */
   private context: ReplayEventContext = {
     errorIds: new Set(),
     traceIds: new Set(),
@@ -539,6 +548,13 @@ export class SentryReplay implements Integration {
         return;
       }
 
+      // Core SDK provides details such as statusCode and http method, while
+      // `window.performance` has transfer size
+      if (type === 'xhr' || type === 'fetch') {
+        this.coreRequests.push(result);
+        return;
+      }
+
       if (type === 'history') {
         // Need to collect visited URLs
         this.context.urls.push(result.name);
@@ -710,8 +726,13 @@ export class SentryReplay implements Integration {
     // Copy and reset entries before processing
     const entries = [...this.performanceEvents];
     this.performanceEvents = [];
+    const entriesWithAdditionalData = getAdditionalRequestData(
+      createPerformanceEntries(entries),
+      this.coreRequests
+    );
+    this.coreRequests = [];
 
-    return this.createPerformanceSpans(createPerformanceEntries(entries));
+    return this.createPerformanceSpans(entriesWithAdditionalData);
   }
 
   /**
