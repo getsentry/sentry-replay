@@ -290,9 +290,22 @@ describe('SentryReplay', () => {
   });
 
   it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
+    const oldLocation = window.location;
     const initialSession = replay.session;
 
     expect(initialSession.id).toBeDefined();
+    // @ts-expect-error private member
+    expect(replay.initialState).toEqual({
+      url: 'http://localhost/',
+      timestamp: BASE_TIMESTAMP,
+    });
+
+    // jest.spyOn(window, 'location')
+    // global.window = Object.create(window);
+    const url = 'http://dummy/';
+    Object.defineProperty(window, 'location', {
+      value: new URL(url),
+    });
 
     // Idle for 15 minutes
     const FIFTEEN_MINUTES = 15 * 60000;
@@ -352,6 +365,18 @@ describe('SentryReplay', () => {
         },
       ])
     );
+
+    // `initialState` should be reset when a new session is created
+    // @ts-expect-error private member
+    expect(replay.initialState).toEqual({
+      url: 'http://dummy/',
+      timestamp: newTimestamp,
+    });
+
+    delete window.location;
+    Object.defineProperty(window, 'location', {
+      value: oldLocation,
+    });
   });
 
   it('uploads a dom breadcrumb 5 seconds after listener receives an event', async () => {
