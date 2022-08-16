@@ -28,7 +28,7 @@ export function captureReplay({
       trace_ids: traceIds,
       urls,
       replay_id: session.id,
-      segment_id: session.segmentId, // TODO: Should this increment?
+      segment_id: session.segmentId,
     },
     { event_id: session.id }
   );

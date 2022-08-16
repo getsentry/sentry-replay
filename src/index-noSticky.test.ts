@@ -137,7 +137,10 @@ describe('SentryReplay (no sticky)', () => {
 
     // Session's last activity should be updated
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
-    expect(replay.session.segmentId).toBe(1);
+
+    // after captureReplay - segmentId will be 1
+    // after captureReplayUpdate is called, it will be 2
+    expect(replay.session.segmentId).toBe(2);
 
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
@@ -156,7 +159,7 @@ describe('SentryReplay (no sticky)', () => {
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
-    expect(replay.session.segmentId).toBe(1);
+    expect(replay.session.segmentId).toBe(2);
 
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
@@ -185,7 +188,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay).not.toHaveSentReplay();
 
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
-    expect(replay.session.segmentId).toBe(1);
+    expect(replay.session.segmentId).toBe(2);
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
 

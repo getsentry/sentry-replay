@@ -245,7 +245,7 @@ describe('SentryReplay', () => {
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
-    expect(replay.session.segmentId).toBe(1);
+    expect(replay.session.segmentId).toBe(2);
 
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
@@ -275,7 +275,7 @@ describe('SentryReplay', () => {
     expect(replay).not.toHaveSentReplay();
 
     expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
-    expect(replay.session.segmentId).toBe(1);
+    expect(replay.session.segmentId).toBe(2);
     // events array should be empty
     expect(replay.eventBuffer.length).toBe(0);
 
@@ -381,7 +381,7 @@ describe('SentryReplay', () => {
       ])
     );
 
-    expect(replay.session.segmentId).toBe(1);
+    expect(replay.session.segmentId).toBe(2);
 
     // breadcrumbs array should be empty
     expect(replay.breadcrumbs).toHaveLength(0);
@@ -438,7 +438,7 @@ describe('SentryReplay', () => {
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session.lastActivity).toBeGreaterThanOrEqual(BASE_TIMESTAMP);
-    expect(replay.session.segmentId).toBe(1);
+    expect(replay.session.segmentId).toBe(2);
 
     // next tick should do nothing
 
@@ -469,7 +469,7 @@ describe('SentryReplay', () => {
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(captureReplayMock).toHaveBeenCalled();
-    expect(replay.session.segmentId).toBe(1);
+    expect(replay.session.segmentId).toBe(2);
 
     (
       replay.sendReplayRequest as jest.MockedFunction<
@@ -483,7 +483,9 @@ describe('SentryReplay', () => {
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(captureReplayMock).not.toHaveBeenCalled();
-    expect(replay.session.segmentId).toBe(2);
+    // 2 additional segments from captureReplayUpdate and accessing segmentId in
+    // the assertion above
+    expect(replay.session.segmentId).toBe(4);
   });
 
   it('does not create root event when there are no events to send', async () => {

@@ -30,10 +30,7 @@ it('non-sticky Session does not save to local storage', function () {
   expect(saveSession).not.toHaveBeenCalled();
   expect(newSession.id).toBe('test_session_id');
   expect(newSession.segmentId).toBe(0);
-
-  newSession.segmentId++;
   expect(saveSession).not.toHaveBeenCalled();
-  expect(newSession.segmentId).toBe(1);
 });
 
 it('sticky Session saves to local storage', function () {
@@ -43,14 +40,10 @@ it('sticky Session saves to local storage', function () {
   expect(newSession.id).toBe('test_session_id');
   expect(newSession.segmentId).toBe(0);
 
-  (saveSession as jest.Mock).mockClear();
-
-  newSession.segmentId++;
   expect(saveSession).toHaveBeenCalledTimes(1);
   expect(saveSession).toHaveBeenCalledWith(
     expect.objectContaining({
       segmentId: 1,
     })
   );
-  expect(newSession.segmentId).toBe(1);
 });

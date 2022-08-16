@@ -101,15 +101,32 @@ export class Session {
     }
   }
 
+  /**
+   * Returns the current `segmentId` and then increments (and saves to session if
+   * sticky)
+   */
   get segmentId() {
-    return this._segmentId;
-  }
+    const value = this._segmentId;
 
-  set segmentId(id: number) {
-    this._segmentId = id;
+    // Auto increment segmentId everytime it is accessed to avoid
+    // the possibility of duplicate segmentIds.
+    this._segmentId++;
+
     if (this.options.stickySession) {
       saveSession(this);
     }
+
+    return value;
+  }
+
+  /**
+   * This is probably not what you want to do as the getter will auto
+   * increment.
+   */
+  set segmentId(_id: number) {
+    throw new Error(
+      'Setting `segmentId` is not supported, the getter will auto increment `segmentId`.'
+    );
   }
 
   get previousSessionId() {

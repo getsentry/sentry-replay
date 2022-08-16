@@ -28,6 +28,6 @@ export function captureReplayUpdate({
     trace_ids: traceIds,
     urls,
     replay_id: session.id,
-    segment_id: ++session.segmentId,
+    segment_id: session.segmentId,
   });
 }
