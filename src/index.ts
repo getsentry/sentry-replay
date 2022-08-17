@@ -3,6 +3,7 @@ import {
   captureException,
   getCurrentHub,
   getEnvelopeEndpointWithUrlEncodedAuth,
+  setContext,
 } from '@sentry/core';
 import { Breadcrumb, Event, Integration } from '@sentry/types';
 import { addInstrumentationHandler } from '@sentry/utils';
@@ -945,6 +946,9 @@ export class SentryReplay implements Integration {
       console.error(ex);
       // Capture error for every failed replay
       // TODO: Remove this before GA as this will create an error on customer's project
+      setContext('Replays', {
+        retryCount: this.retryCount,
+      });
       captureException(new Error(UNABLE_TO_SEND_REPLAY));
 
       // If an error happened here, it's likely that uploading the attachment
