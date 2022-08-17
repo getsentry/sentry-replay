@@ -28,7 +28,6 @@ import { createPayload } from './util/createPayload';
 import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
-import { supportsSendBeacon } from './util/supportsSendBeacon';
 import {
   createMemoryEntry,
   createPerformanceEntries,
@@ -869,7 +868,7 @@ export class SentryReplay implements Integration {
   }
 
   /**
-   * Send replay attachment using either `sendBeacon()` or `fetch()`
+   * Send replay attachment using or `fetch()`
    */
   async sendReplayRequest({ endpoint, events }: ReplayRequest) {
     const payloadWithSequence = createPayload({
@@ -896,13 +895,6 @@ export class SentryReplay implements Integration {
         ],
       ]
     );
-
-    // If sendBeacon is supported and payload is smol enough...
-    if (supportsSendBeacon() && events.length <= 65536) {
-      logger.log(`uploading attachment via sendBeacon()`);
-      window.navigator.sendBeacon(endpoint, serializeEnvelope(envelope));
-      return;
-    }
 
     // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
     logger.log(`uploading attachment via fetch()`);
