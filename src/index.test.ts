@@ -19,6 +19,8 @@ async function advanceTimers(time: number) {
 
 describe('SentryReplay', () => {
   let replay: SentryReplay;
+  const prevLocation = window.location;
+
   type MockSendReplayRequest = jest.MockedFunction<
     typeof replay.sendReplayRequest
   >;
@@ -69,6 +71,11 @@ describe('SentryReplay', () => {
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
     mockRecord.takeFullSnapshot.mockClear();
+    delete window.location;
+    Object.defineProperty(window, 'location', {
+      value: prevLocation,
+      writable: true,
+    });
   });
 
   afterAll(() => {
@@ -290,7 +297,6 @@ describe('SentryReplay', () => {
   });
 
   it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
-    const oldLocation = window.location;
     const initialSession = replay.session;
 
     expect(initialSession.id).toBeDefined();
@@ -300,8 +306,6 @@ describe('SentryReplay', () => {
       timestamp: BASE_TIMESTAMP,
     });
 
-    // jest.spyOn(window, 'location')
-    // global.window = Object.create(window);
     const url = 'http://dummy/';
     Object.defineProperty(window, 'location', {
       value: new URL(url),
@@ -371,11 +375,6 @@ describe('SentryReplay', () => {
     expect(replay.initialState).toEqual({
       url: 'http://dummy/',
       timestamp: newTimestamp,
-    });
-
-    delete window.location;
-    Object.defineProperty(window, 'location', {
-      value: oldLocation,
     });
   });
 
