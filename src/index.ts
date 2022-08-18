@@ -868,7 +868,7 @@ export class SentryReplay implements Integration {
   }
 
   /**
-   * Send replay attachment using or `fetch()`
+   * Send replay attachment using `fetch()`
    */
   async sendReplayRequest({ endpoint, events }: ReplayRequest) {
     const payloadWithSequence = createPayload({
