@@ -910,10 +910,17 @@ export class SentryReplay implements Integration {
 
     // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
     logger.log(`uploading attachment via fetch()`);
-    await fetch(endpoint, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       body: serializeEnvelope(envelope),
     });
+    if (response.status !== 200) {
+      setContext('Send Replay Response', {
+        status: response.status,
+        body: await response.text(),
+      });
+      throw new Error(UNABLE_TO_SEND_REPLAY);
+    }
   }
 
   resetRetries() {
