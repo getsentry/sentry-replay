@@ -392,7 +392,6 @@ export class SentryReplay implements Integration {
 
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('focus', this.handleWindowFocus);
-    window.removeEventListener('beforeunload', this.handleWindowUnload);
 
     if (this.performanceObserver) {
       this.performanceObserver.disconnect();
