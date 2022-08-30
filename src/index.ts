@@ -341,7 +341,6 @@ export class SentryReplay implements Integration {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     window.addEventListener('blur', this.handleWindowBlur);
     window.addEventListener('focus', this.handleWindowFocus);
-    window.addEventListener('beforeunload', this.handleWindowUnload);
 
     // Listeners from core SDK //
     const scope = getCurrentHub().getScope();
@@ -525,18 +524,6 @@ export class SentryReplay implements Integration {
     });
 
     this.doChangeToForegroundTasks(breadcrumb);
-  };
-
-  /**
-   * Handle when page is closed
-   */
-  handleWindowUnload = () => {
-    this.createCustomBreadcrumb(
-      createBreadcrumb({
-        category: 'ui.exit',
-      })
-    );
-    this.destroy();
   };
 
   /**
