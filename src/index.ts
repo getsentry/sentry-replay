@@ -122,6 +122,7 @@ export class SentryReplay implements Integration {
     traceIds: new Set(),
     urls: [],
     earliestEvent: null,
+    latestEvent: null,
   };
 
   session: Session | undefined;
@@ -273,7 +274,7 @@ export class SentryReplay implements Integration {
     // elapses.
     this.timeout = window.setTimeout(() => {
       logger.log('replay timeout exceeded, finishing replay event');
-      this.flushUpdate(now);
+      this.flushUpdate();
     }, this.options.flushMinDelay);
   }
 
@@ -479,11 +480,7 @@ export class SentryReplay implements Integration {
       // a previous session ID. In this case, we want to buffer events
       // for a set amount of time before flushing. This can help avoid
       // capturing replays of users that immediately close the window.
-      const now = new Date().getTime();
-      setTimeout(
-        () => this.conditionalFlush(now),
-        this.options.initialFlushDelay
-      );
+      setTimeout(() => this.conditionalFlush(), this.options.initialFlushDelay);
 
       return true;
     });
@@ -783,12 +780,12 @@ export class SentryReplay implements Integration {
   /**
    * Only flush if `captureOnlyOnError` is false.
    */
-  conditionalFlush(lastActivity?: number) {
+  conditionalFlush() {
     if (this.options.captureOnlyOnError) {
       return;
     }
 
-    return this.flushUpdate(lastActivity);
+    return this.flushUpdate();
   }
 
   /**
@@ -832,7 +829,7 @@ export class SentryReplay implements Integration {
    * Performance events are only added right before flushing - this is probably
    * due to the buffered performance observer events.
    */
-  async flushUpdate(lastActivity?: number) {
+  async flushUpdate() {
     if (!this.checkAndHandleExpiredSession()) {
       logger.error(
         new Error('Attempting to finish replay event after session expired.')
@@ -859,7 +856,7 @@ export class SentryReplay implements Integration {
 
     // Save the timestamp before sending replay because `captureEvent` should
     // only be called after successfully uploading a replay
-    const timestamp = lastActivity ?? new Date().getTime();
+    const timestamp = new Date().getTime();
 
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
