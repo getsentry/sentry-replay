@@ -122,7 +122,6 @@ export class SentryReplay implements Integration {
     traceIds: new Set(),
     urls: [],
     earliestEvent: null,
-    latestEvent: null,
   };
 
   session: Session | undefined;
