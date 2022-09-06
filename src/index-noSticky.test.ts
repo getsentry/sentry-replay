@@ -140,7 +140,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay.session?.segmentId).toBe(1);
 
     // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay.eventBuffer?.length).toBe(0);
   });
 
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', async () => {
@@ -159,7 +159,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay.session?.segmentId).toBe(1);
 
     // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay.eventBuffer?.length).toBe(0);
   });
 
   it('uploads a replay event if 15 seconds have elapsed since the last replay upload', async () => {
@@ -187,7 +187,7 @@ describe('SentryReplay (no sticky)', () => {
     expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP + 16000);
     expect(replay.session?.segmentId).toBe(1);
     // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay.eventBuffer?.length).toBe(0);
 
     // Let's make sure it continues to work
     mockSendReplayRequest.mockClear();
