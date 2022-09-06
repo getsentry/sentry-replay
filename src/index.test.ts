@@ -4,7 +4,7 @@ import * as SentryUtils from '@sentry/utils';
 import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 
 import { SentryReplay } from '@';
-import * as CaptureReplay from '@/api/captureReplay';
+import * as CaptureReplayEvent from '@/api/captureReplayEvent';
 import {
   REPLAY_SESSION_KEY,
   SESSION_IDLE_DURATION,
@@ -28,10 +28,11 @@ describe('SentryReplay', () => {
   let mockSendReplayRequest: MockSendReplayRequest;
   let domHandler: (args: any) => any;
   const { record: mockRecord } = mockRrweb();
-  jest.spyOn(CaptureReplay, 'captureReplay');
-  const captureReplayMock = CaptureReplay.captureReplay as jest.MockedFunction<
-    typeof CaptureReplay.captureReplay
-  >;
+  jest.spyOn(CaptureReplayEvent, 'captureReplayEvent');
+  const captureReplayEventMock =
+    CaptureReplayEvent.captureReplayEvent as jest.MockedFunction<
+      typeof CaptureReplayEvent.captureReplayEvent
+    >;
   jest.spyOn(SentryCore, 'captureEvent');
   const captureEventMock = SentryCore.captureEvent as jest.MockedFunction<
     typeof SentryCore.captureEvent
@@ -78,7 +79,7 @@ describe('SentryReplay', () => {
       value: prevLocation,
       writable: true,
     });
-    captureReplayMock.mockClear();
+    captureReplayEventMock.mockClear();
   });
 
   afterAll(() => {
@@ -104,7 +105,7 @@ describe('SentryReplay', () => {
     });
     expect(replay.session?.id).toBeDefined();
     expect(replay.session?.segmentId).toBeDefined();
-    expect(captureReplayMock).not.toHaveBeenCalled();
+    expect(captureReplayEventMock).not.toHaveBeenCalled();
   });
 
   it('clears session', () => {
@@ -438,7 +439,7 @@ describe('SentryReplay', () => {
     await advanceTimers(5000);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-    expect(captureEventMock).toHaveBeenCalledTimes(1); // root event was created
+    expect(captureEventMock).not.toHaveBeenCalled(); // Does not get captured until recording is uploaded
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
@@ -466,7 +467,21 @@ describe('SentryReplay', () => {
     expect(captureEventMock).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
     await advanceTimers(2000);
-    expect(captureEventMock).toHaveBeenCalled();
+    expect(captureEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error_ids: expect.arrayContaining([expect.any(String)]),
+        replay_id: expect.any(String),
+        replay_start_timestamp: BASE_TIMESTAMP / 1000,
+        segment_id: 0,
+        timestamp: (BASE_TIMESTAMP + 5000) / 1000,
+        trace_ids: [],
+        type: 'replay_event',
+        urls: ['http://localhost/'],
+      }),
+      {
+        event_id: expect.any(String),
+      }
+    );
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
@@ -484,7 +499,7 @@ describe('SentryReplay', () => {
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
   });
 
-  it('does not create more than one root event', async () => {
+  it('sends a replay event after each recording event', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -502,7 +517,7 @@ describe('SentryReplay', () => {
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(captureReplayMock).toHaveBeenCalled();
+    expect(captureReplayEventMock).toHaveBeenCalled();
     expect(replay.session?.segmentId).toBe(1);
 
     (
@@ -510,17 +525,17 @@ describe('SentryReplay', () => {
         typeof replay.sendReplayRequest
       >
     ).mockClear();
-    captureReplayMock.mockClear();
+    captureReplayEventMock.mockClear();
 
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(captureReplayMock).not.toHaveBeenCalled();
+    expect(captureReplayEventMock).toHaveBeenCalled();
     expect(replay.session?.segmentId).toBe(2);
   });
 
-  it('does not create root event when there are no events to send', async () => {
+  it('does not create replay event when there are no events to send', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -531,7 +546,7 @@ describe('SentryReplay', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
-    expect(captureReplayMock).not.toHaveBeenCalled();
+    expect(captureReplayEventMock).not.toHaveBeenCalled();
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
@@ -546,7 +561,7 @@ describe('SentryReplay', () => {
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
-    expect(captureReplayMock).toHaveBeenCalledWith(
+    expect(captureReplayEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         initialState: {
           timestamp: BASE_TIMESTAMP,
@@ -554,6 +569,62 @@ describe('SentryReplay', () => {
         },
       })
     );
+  });
+
+  it('does not create replay event if recording upload completely fails', async () => {
+    captureEventMock.mockReset();
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
+    // Suppress console.errors
+    jest.spyOn(console, 'error').mockImplementation(jest.fn());
+    const mockConsole = console.error as jest.MockedFunction<
+      typeof console.error
+    >;
+    // fail the first and second requests and pass the third one
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    mockRecord._emitter(TEST_EVENT);
+
+    await advanceTimers(5000);
+
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(captureEventMock).not.toHaveBeenCalled(); // Does not get captured until recording is uploaded
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
+    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+
+    // Reset console.error mock to minimize the amount of time we are hiding
+    // console messages in case an error happens after
+    mockConsole.mockClear();
+
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    await advanceTimers(5000);
+    expect(captureEventMock).not.toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(2);
+
+    // next tick should retry and fail
+    mockConsole.mockClear();
+
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    await advanceTimers(10000);
+    expect(captureEventMock).not.toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(3);
+
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    await advanceTimers(30000);
+    expect(captureEventMock).not.toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(4);
+
+    // No activity has occurred, session's last activity should remain the same
+    expect(replay.session?.lastActivity).toBeGreaterThanOrEqual(BASE_TIMESTAMP);
+    expect(replay.session?.segmentId).toBe(1);
+
+    // TODO: Recording should stop and next event should do nothing
   });
 
   it('has correct timestamps when there events earlier than initial timestamp', async function () {
@@ -567,7 +638,7 @@ describe('SentryReplay', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
-    expect(captureReplayMock).not.toHaveBeenCalled();
+    expect(captureReplayEventMock).not.toHaveBeenCalled();
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
@@ -590,7 +661,7 @@ describe('SentryReplay', () => {
 
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
-    expect(captureReplayMock).toHaveBeenCalledWith(
+    expect(captureReplayEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         initialState: {
           timestamp: BASE_TIMESTAMP - 10000,
