@@ -1,7 +1,7 @@
 import { REPLAY_SESSION_KEY } from './constants';
 
 /**
- * Fetches a session from storage
+ * Deletes a session from storage
  */
 export function deleteSession(): void {
   const hasSessionStorage = 'sessionStorage' in window;
