@@ -10,5 +10,9 @@ export function deleteSession(): void {
     return;
   }
 
-  window.sessionStorage.removeItem(REPLAY_SESSION_KEY);
+  try {
+    window.sessionStorage.removeItem(REPLAY_SESSION_KEY);
+  } catch {
+    // Ignore potential SecurityError exceptions
+  }
 }
