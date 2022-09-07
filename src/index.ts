@@ -702,6 +702,7 @@ export class SentryReplay implements Integration {
    */
   addEvent(event: RecordingEvent, isCheckout?: boolean) {
     if (!this.eventBuffer) {
+      // This implies that `isEnabled` is false
       return;
     }
 

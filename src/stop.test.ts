@@ -1,3 +1,4 @@
+import * as SentryUtils from '@sentry/utils';
 // mock functions need to be imported first
 import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 
@@ -13,11 +14,21 @@ describe('SentryReplay - stop', () => {
   type MockSendReplayRequest = jest.MockedFunction<
     typeof replay.sendReplayRequest
   >;
+  type MockAddInstrumentationHandler = jest.MockedFunction<
+    typeof SentryUtils.addInstrumentationHandler
+  >;
   let mockSendReplayRequest: MockSendReplayRequest;
   const { record: mockRecord } = mockRrweb();
 
+  let mockAddInstrumentationHandler: MockAddInstrumentationHandler;
+
   beforeAll(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    mockAddInstrumentationHandler = jest.spyOn(
+      SentryUtils,
+      'addInstrumentationHandler'
+    ) as MockAddInstrumentationHandler;
+
     ({ replay } = mockSdk());
     jest.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
@@ -43,6 +54,7 @@ describe('SentryReplay - stop', () => {
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
     mockRecord.takeFullSnapshot.mockClear();
+    mockAddInstrumentationHandler.mockClear();
     // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
     delete window.location;
     Object.defineProperty(window, 'location', {
@@ -113,5 +125,32 @@ describe('SentryReplay - stop', () => {
     expect(replay.session?.lastActivity).toBeGreaterThan(
       BASE_TIMESTAMP + ELAPSED + ELAPSED
     );
+  });
+
+  it('does not buffer events when stopped', async function () {
+    window.dispatchEvent(new Event('focus'));
+    await new Promise(process.nextTick);
+
+    expect(replay.eventBuffer?.length).toBe(1);
+
+    // stop replays
+    replay.destroy();
+
+    expect(replay.eventBuffer?.length).toBe(undefined);
+
+    window.dispatchEvent(new Event('focus'));
+    await new Promise(process.nextTick);
+
+    expect(replay.eventBuffer?.length).toBe(undefined);
+  });
+
+  it('does not call core SDK `addInstrumentationHandler` after initial setup', async function () {
+    // NOTE: We clear addInstrumentationHandler mock after every test
+    replay.destroy();
+    replay.setup();
+    replay.destroy();
+    replay.setup();
+
+    expect(mockAddInstrumentationHandler).not.toHaveBeenCalled();
   });
 });
