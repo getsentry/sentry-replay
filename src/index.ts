@@ -300,9 +300,9 @@ export class SentryReplay implements Integration {
    */
   destroy() {
     logger.log('Destroying instance');
+    this.isEnabled = false;
     this.removeListeners();
     this.stopRecording?.();
-    this.isEnabled = false;
     this.eventBuffer?.destroy();
     this.eventBuffer = null;
   }
