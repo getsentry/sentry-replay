@@ -22,6 +22,7 @@ import {
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
 } from './session/constants';
+import { deleteSession } from './session/deleteSession';
 import { getSession } from './session/getSession';
 import { Session } from './session/Session';
 import createBreadcrumb from './util/createBreadcrumb';
@@ -146,7 +147,7 @@ export class SentryReplay implements Integration {
     flushMinDelay = 5000,
     flushMaxDelay = 15000,
     initialFlushDelay = 5000,
-    stickySession = false, // TBD: Making this opt-in for now
+    stickySession = true,
     useCompression = true,
     captureOnlyOnError = false,
     replaysSamplingRate = 1.0,
@@ -291,7 +292,7 @@ export class SentryReplay implements Integration {
     // elapses.
     this.timeout = window.setTimeout(() => {
       logger.log('replay timeout exceeded, finishing replay event');
-      this.flushUpdate(now);
+      this.flushUpdate();
     }, this.options.flushMinDelay);
   }
 
@@ -308,6 +309,7 @@ export class SentryReplay implements Integration {
   }
 
   clearSession() {
+    deleteSession();
     this.session = undefined;
   }
 
@@ -403,12 +405,17 @@ export class SentryReplay implements Integration {
       'navigation',
       'paint',
       'resource',
-    ].forEach((type) =>
-      this.performanceObserver?.observe({
-        type,
-        buffered: true,
-      })
-    );
+    ].forEach((type) => {
+      try {
+        this.performanceObserver?.observe({
+          type,
+          buffered: true,
+        });
+      } catch {
+        // This can throw if an entry type is not supported in the browser.
+        // Ignore these errors.
+      }
+    });
   }
 
   /**
@@ -509,11 +516,7 @@ export class SentryReplay implements Integration {
       // a previous session ID. In this case, we want to buffer events
       // for a set amount of time before flushing. This can help avoid
       // capturing replays of users that immediately close the window.
-      const now = new Date().getTime();
-      setTimeout(
-        () => this.conditionalFlush(now),
-        this.options.initialFlushDelay
-      );
+      setTimeout(() => this.conditionalFlush(), this.options.initialFlushDelay);
 
       return true;
     });
@@ -826,12 +829,12 @@ export class SentryReplay implements Integration {
   /**
    * Only flush if `captureOnlyOnError` is false.
    */
-  conditionalFlush(lastActivity?: number) {
+  conditionalFlush() {
     if (this.options.captureOnlyOnError) {
       return;
     }
 
-    return this.flushUpdate(lastActivity);
+    return this.flushUpdate();
   }
 
   /**
@@ -875,7 +878,7 @@ export class SentryReplay implements Integration {
    * Performance events are only added right before flushing - this is probably
    * due to the buffered performance observer events.
    */
-  async flushUpdate(lastActivity?: number) {
+  async flushUpdate() {
     if (!this.isEnabled) {
       // This is just a precaution, there should be no listeners that would
       // cause a flush.
@@ -908,7 +911,7 @@ export class SentryReplay implements Integration {
 
     // Save the timestamp before sending replay because `captureEvent` should
     // only be called after successfully uploading a replay
-    const timestamp = lastActivity ?? new Date().getTime();
+    const timestamp = new Date().getTime();
 
     // Only want to create replay event if session is new
     if (this.needsCaptureReplay) {
