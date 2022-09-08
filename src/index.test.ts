@@ -79,6 +79,7 @@ describe('SentryReplay', () => {
       writable: true,
     });
     mockCaptureReplay.mockClear();
+    mockCaptureEvent.mockClear();
   });
 
   afterAll(() => {
@@ -597,7 +598,7 @@ describe('SentryReplay', () => {
     );
   });
 
-  it.only('does not have stale `replay_start_timestamp`', async function () {
+  it('does not have stale `replay_start_timestamp`', async function () {
     // @ts-expect-error read-only
     window.performance.timeOrigin = BASE_TIMESTAMP;
     // add a fake/old performance event
