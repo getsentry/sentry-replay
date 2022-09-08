@@ -628,6 +628,7 @@ export class SentryReplay implements Integration {
     // For whatever reason the observer was returning duplicate navigation
     // entries (the other entry types were not duplicated).
     const newEntries = new Set(list.getEntries());
+    console.log(list.getEntries());
     this.performanceEvents = [
       ...this.performanceEvents,
       ...Array.from(newEntries),
@@ -909,19 +910,20 @@ export class SentryReplay implements Integration {
     // Save the timestamp before sending replay because `captureEvent` should
     // only be called after successfully uploading a replay
     const timestamp = new Date().getTime();
+    // NOTE: Copy values from instance members, as it's possible they could
+    // change before the flush finishes.
     const replayId = this.session.id;
     const newSessionCreated = this.newSessionCreated;
+    // Always increment segmentId regardless of outcome of sending replay
+    const segmentId = this.session.segmentId++;
 
     // Reset this to null regardless of `sendReplay` result so that future
     // events will get flushed properly
     this.initialEventTimestampSinceFlush = null;
 
     try {
-      // Always increment segmentId regardless of outcome of sending replay
-      const segmentId = this.session.segmentId++;
       // Note this empties the event buffer regardless of outcome of sending replay
       const recordingData = await this.eventBuffer.finish();
-
       await this.sendReplay(replayId, recordingData, segmentId);
 
       // The below will only happen after successfully sending replay //
