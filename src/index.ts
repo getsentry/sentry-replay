@@ -486,6 +486,8 @@ export class SentryReplay implements Integration {
       return;
     }
 
+    console.log(event);
+
     this.addUpdate(() => {
       // We need to clear existing events on a checkout, otherwise they are
       // incremental event updates and should be appended
@@ -539,6 +541,7 @@ export class SentryReplay implements Integration {
       category: 'ui.blur',
     });
 
+    this.updateLastActivity();
     this.doChangeToBackgroundTasks(breadcrumb);
   };
 
@@ -575,6 +578,7 @@ export class SentryReplay implements Integration {
       if (type === 'history') {
         // Need to collect visited URLs
         this.context.urls.push(result.name);
+        this.updateLastActivity();
       }
 
       this.addUpdate(() => {
@@ -606,6 +610,11 @@ export class SentryReplay implements Integration {
 
       if (result.category === 'sentry.transaction') {
         return;
+      }
+
+      console.log(result);
+      if (result.category === 'ui.click') {
+        this.updateLastActivity();
       }
 
       this.addUpdate(() => {
@@ -869,7 +878,6 @@ export class SentryReplay implements Integration {
     this.context.urls = [];
     this.context.earliestEvent = null;
 
-    // @ts-expect-error: Type 'undefined' is not assignable to type 'Session'.ts(2322)
     return context;
   }
 
@@ -930,13 +938,6 @@ export class SentryReplay implements Integration {
       await this.sendReplay(replayId, recordingData, segmentId);
 
       // The below will only happen after successfully sending replay //
-
-      // TBD: Alternatively we could update this after every rrweb event
-      // `timestamp` should reflect when the event happens. e.g. the timestamp
-      // of the event is passed as an argument in the case where a timeout
-      // occurs.
-      this.updateLastActivity(timestamp);
-
       captureReplayEvent({
         ...this.popEventContext({ timestamp }),
         replayId,
