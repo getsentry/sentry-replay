@@ -208,6 +208,10 @@ export class SentryReplay implements Integration {
       return;
     }
 
+    // setup() is generally called on page load or manually - in both cases we
+    // should treat it as an activity
+    this.updateLastActivity();
+
     this.eventBuffer = createEventBuffer({
       useCompression: Boolean(this.options.useCompression),
     });
@@ -486,8 +490,6 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    console.log(event);
-
     this.addUpdate(() => {
       // We need to clear existing events on a checkout, otherwise they are
       // incremental event updates and should be appended
@@ -541,7 +543,8 @@ export class SentryReplay implements Integration {
       category: 'ui.blur',
     });
 
-    this.updateLastActivity();
+    // Do not count blur as a user action -- it's part of the process of them
+    // leaving the page
     this.doChangeToBackgroundTasks(breadcrumb);
   };
 
@@ -553,6 +556,8 @@ export class SentryReplay implements Integration {
       category: 'ui.focus',
     });
 
+    // Do not count focus as a user action -- instead wait until they focus and
+    // interactive with page
     this.doChangeToForegroundTasks(breadcrumb);
   };
 
@@ -612,7 +617,6 @@ export class SentryReplay implements Integration {
         return;
       }
 
-      console.log(result);
       if (result.category === 'ui.click') {
         this.updateLastActivity();
       }
