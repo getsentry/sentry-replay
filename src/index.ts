@@ -977,7 +977,6 @@ export class SentryReplay implements Integration {
       console.error(err);
     } finally {
       this.throttledFlushUpdate();
-      // this.flushQueue.push(this.flushUpdate());
     }
   };
 
