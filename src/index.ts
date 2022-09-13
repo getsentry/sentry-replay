@@ -348,7 +348,7 @@ export class SentryReplay implements Integration {
     this.initialEventTimestampSinceFlush = null;
 
     // Reset context as well
-    this.popEventContext();
+    this.clearContext();
     this.initialState = {
       timestamp: new Date().getTime(),
       url,
@@ -853,13 +853,23 @@ export class SentryReplay implements Integration {
   }
 
   /**
+   * Clear context
+   */
+  clearContext() {
+    this.context.errorIds.clear();
+    this.context.traceIds.clear();
+    this.context.urls = [];
+    this.context.earliestEvent = null;
+  }
+
+  /**
    * Return and clear context
    */
   popEventContext({
     timestamp,
   }: {
-    timestamp?: number;
-  } = {}): Omit<
+    timestamp: number;
+  }): Omit<
     CaptureReplayEventParams,
     'includeReplayStartTimestamp' | 'segmentId' | 'replayId'
   > {
@@ -880,10 +890,7 @@ export class SentryReplay implements Integration {
       urls: this.context.urls,
     };
 
-    this.context.errorIds.clear();
-    this.context.traceIds.clear();
-    this.context.urls = [];
-    this.context.earliestEvent = null;
+    this.clearContext();
 
     return context;
   }
