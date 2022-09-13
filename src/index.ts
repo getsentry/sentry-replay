@@ -962,6 +962,7 @@ export class SentryReplay implements Integration {
     // will be handled by queued flush
     clearTimeout(this.timeout);
 
+    // No existing flush in progress, proceed with flushing
     if (this.flushQueue.length === 0) {
       const promise = this.runFlush();
       this.flushQueue.push(promise);
@@ -970,7 +971,10 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    // Wait for previous promises to be resolved
+    // Wait for previous flush to finish, then call a throttled
+    // `flushUpdate()`. It's throttled because we could many other flush
+    // requests queued waiting for it to unlock. These other requests can be
+    // batched into a single flush.
     try {
       await Promise.all(this.flushQueue);
     } catch (err) {
