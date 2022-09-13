@@ -16,7 +16,7 @@ export interface CaptureReplayEventParams {
   /**
    * Timestamp of the event in milliseconds
    */
-  timestamp: number;
+  timestamp?: number;
   traceIds: string[];
   urls: string[];
 }
@@ -38,7 +38,7 @@ export function captureReplayEvent({
       ...(includeReplayStartTimestamp
         ? { replay_start_timestamp: initialState.timestamp / 1000 }
         : {}),
-      ...(timestamp ? { timestamp: timestamp / 1000 } : {}),
+      timestamp: (timestamp ? timestamp : new Date().getTime()) / 1000,
       error_ids: errorIds,
       trace_ids: traceIds,
       urls,
