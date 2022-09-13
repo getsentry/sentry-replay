@@ -116,6 +116,7 @@ describe('SentryReplay - stop', () => {
     jest.advanceTimersByTime(ELAPSED);
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
+    jest.runAllTimers();
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(replay).toHaveSentReplay(
@@ -129,8 +130,6 @@ describe('SentryReplay - stop', () => {
 
   it('does not buffer events when stopped', async function () {
     window.dispatchEvent(new Event('focus'));
-    await new Promise(process.nextTick);
-
     expect(replay.eventBuffer?.length).toBe(1);
 
     // stop replays
@@ -142,6 +141,7 @@ describe('SentryReplay - stop', () => {
     await new Promise(process.nextTick);
 
     expect(replay.eventBuffer?.length).toBe(undefined);
+    expect(mockSendReplayRequest).not.toHaveBeenCalled();
   });
 
   it('does not call core SDK `addInstrumentationHandler` after initial setup', async function () {

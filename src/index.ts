@@ -8,6 +8,7 @@ import {
 import { Breadcrumb, Event, Integration } from '@sentry/types';
 import { addInstrumentationHandler } from '@sentry/utils';
 import { createEnvelope, serializeEnvelope } from '@sentry/utils';
+import throttle from 'lodash.throttle';
 import { EventType, record } from 'rrweb';
 
 import {
@@ -105,6 +106,10 @@ export class SentryReplay implements Integration {
    */
   private newSessionCreated = false;
 
+  private flushQueue: Promise<unknown>[] = [];
+
+  private flushUpdate: () => Promise<void> | undefined;
+
   /**
    * Is the integration currently active?
    */
@@ -169,11 +174,20 @@ export class SentryReplay implements Integration {
       useCompression,
     };
 
-    // Modify rrweb options to checkoutEveryNthSecond if this is defined, as we don't know when an error occurs, so we want to try to minimize the number of events captured.
+    // Modify rrweb options to checkoutEveryNthSecond if this is defined, as we
+    // don't know when an error occurs, so we want to try to minimize the
+    // number of events captured.
     if (this.options.captureOnlyOnError) {
-      // Checkout every minute, meaning we only get up-to one minute of events before the error happens
+      // Checkout every minute, meaning we only get up-to one minute of events
+      // before the error happens
       this.recordingOptions.checkoutEveryNms = 60000;
     }
+
+    // Create a throttled flush function - it should run at most once every
+    // `flushMinDelay` milliseconds
+    this.flushUpdate = throttle(() => {
+      return this.unthrottledFlushUpdate();
+    }, this.options.flushMinDelay);
   }
 
   /**
@@ -193,7 +207,8 @@ export class SentryReplay implements Integration {
   /**
    * Initializes the plugin.
    *
-   * Creates or loads a session, attaches listeners to varying events (DOM, PerformanceObserver, Recording, Sentry SDK, etc)
+   * Creates or loads a session, attaches listeners to varying events (DOM,
+   * PerformanceObserver, Recording, Sentry SDK, etc)
    */
   setup() {
     this.loadSession({ expiry: SESSION_IDLE_DURATION });
@@ -275,17 +290,12 @@ export class SentryReplay implements Integration {
     // Otherwise schedule it to be finished in `this.options.flushMinDelay`
     if (flushMaxDelayExceeded) {
       logger.log('replay max delay exceeded, finishing replay event');
-      this.flushUpdate();
+      this.unthrottledFlushUpdate();
       return;
     }
 
-    // Set timer to finish replay event and send replay attachment to
-    // Sentry. Will be cancelled if an event happens before `flushMinDelay`
-    // elapses.
-    this.timeout = window.setTimeout(() => {
-      logger.log('replay timeout exceeded, finishing replay event');
-      this.flushUpdate();
-    }, this.options.flushMinDelay);
+    // This call is throttled
+    this.flushUpdate();
   }
 
   /**
@@ -511,7 +521,10 @@ export class SentryReplay implements Integration {
       // a previous session ID. In this case, we want to buffer events
       // for a set amount of time before flushing. This can help avoid
       // capturing replays of users that immediately close the window.
-      setTimeout(() => this.conditionalFlush(), this.options.initialFlushDelay);
+      setTimeout(
+        () => this.conditionalFlush({ throttled: false }),
+        this.options.initialFlushDelay
+      );
 
       return true;
     });
@@ -831,9 +844,13 @@ export class SentryReplay implements Integration {
   /**
    * Only flush if `captureOnlyOnError` is false.
    */
-  conditionalFlush() {
+  conditionalFlush({ throttled = true }: { throttled?: boolean } = {}) {
     if (this.options.captureOnlyOnError) {
       return;
+    }
+
+    if (!throttled) {
+      return this.unthrottledFlushUpdate();
     }
 
     return this.flushUpdate();
@@ -873,31 +890,7 @@ export class SentryReplay implements Integration {
     return context;
   }
 
-  /**
-   * Flushes replay event buffer to Sentry.
-   *
-   * Performance events are only added right before flushing - this is probably
-   * due to the buffered performance observer events.
-   */
-  async flushUpdate() {
-    if (!this.isEnabled) {
-      // This is just a precaution, there should be no listeners that would
-      // cause a flush.
-      return;
-    }
-
-    if (!this.checkAndHandleExpiredSession()) {
-      logger.error(
-        new Error('Attempting to finish replay event after session expired.')
-      );
-      return;
-    }
-
-    if (!this.session?.id) {
-      console.error(new Error('[Sentry]: No transaction, no replay'));
-      return;
-    }
-
+  async runFlush(session: Session) {
     // Since already flushing, ensure other queued flushes are cancelled
     clearTimeout(this.timeout);
 
@@ -915,10 +908,10 @@ export class SentryReplay implements Integration {
     const timestamp = new Date().getTime();
     // NOTE: Copy values from instance members, as it's possible they could
     // change before the flush finishes.
-    const replayId = this.session.id;
+    const replayId = session.id;
     const newSessionCreated = this.newSessionCreated;
     // Always increment segmentId regardless of outcome of sending replay
-    const segmentId = this.session.segmentId++;
+    const segmentId = session.segmentId++;
 
     // Reset this to null regardless of `sendReplay` result so that future
     // events will get flushed properly
@@ -949,6 +942,49 @@ export class SentryReplay implements Integration {
       console.error(err);
     }
   }
+
+  /**
+   * Flushes replay event buffer to Sentry.
+   *
+   * Performance events are only added right before flushing - this is probably
+   * due to the buffered performance observer events.
+   */
+  unthrottledFlushUpdate = async () => {
+    if (!this.isEnabled) {
+      // This is just a precaution, there should be no listeners that would
+      // cause a flush.
+      return;
+    }
+
+    if (!this.checkAndHandleExpiredSession()) {
+      logger.error(
+        new Error('Attempting to finish replay event after session expired.')
+      );
+      return;
+    }
+
+    if (!this.session?.id) {
+      console.error(new Error('[Sentry]: No transaction, no replay'));
+      return;
+    }
+
+    if (this.flushQueue.length === 0) {
+      const promise = this.runFlush(this.session);
+      this.flushQueue.push(promise);
+      await promise;
+      this.flushQueue.pop();
+      return;
+    }
+
+    // Wait for previous promises to be resolved
+    try {
+      await Promise.all(this.flushQueue);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      this.flushUpdate();
+    }
+  };
 
   /**
    * Send replay attachment using `fetch()`
@@ -987,7 +1023,7 @@ export class SentryReplay implements Integration {
 
     // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
     logger.log(`uploading attachment via fetch()`);
-    const response = await fetch(endpoint, {
+    const response = await global.fetch(endpoint, {
       method: 'POST',
       body: serializeEnvelope(envelope),
     });
