@@ -5,6 +5,10 @@ import { InitialState } from '@/types';
 
 export interface CaptureReplayEventParams {
   initialState: InitialState;
+  /**
+   * Include a timestamp that should be deemed as the "starting" timestamp of the
+   * replay. This usually comes from a `window.performance` entry.
+   */
   includeReplayStartTimestamp: boolean;
   errorIds: string[];
   replayId: string;

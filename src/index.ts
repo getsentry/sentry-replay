@@ -855,7 +855,10 @@ export class SentryReplay implements Integration {
     timestamp,
   }: {
     timestamp?: number;
-  } = {}): CaptureReplayEventParams {
+  } = {}): Omit<
+    CaptureReplayEventParams,
+    'includeReplayStartTimestamp' | 'segment_id' | 'replay_id'
+  > {
     const initialState = this.initialState;
     if (
       this.initialState &&
