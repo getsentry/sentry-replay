@@ -974,8 +974,9 @@ export class SentryReplay implements Integration {
 
     // Wait for previous flush to finish, then call a throttled
     // `flushUpdate()`. It's throttled because other flush
-    // requests could be queued waiting for it to resolve. These other requests
-    // will be batched into a single flush.
+    // requests could be queued waiting for it to resolve. We want to reduce
+    // all outstanding requests (as well as any new flush requests that occur
+    // within a second of the locked flush completing) into a single flush.
     try {
       await this.flushLock;
     } catch (err) {
