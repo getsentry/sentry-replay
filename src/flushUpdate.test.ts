@@ -175,7 +175,7 @@ it('long first flush enqueues following events', async () => {
   expect(replay.runFlush).toHaveBeenCalledTimes(1);
   await advanceTimers(6000);
   // t=20s
-  // addPerformanceEntries is finished, `flushQueue` promise is resolved, calls
+  // addPerformanceEntries is finished, `flushLock` promise is resolved, calls
   // throttledFlushUpdate, which will call `flushUpdate` in 1 second
   expect(replay.flushUpdate).toHaveBeenCalledTimes(4);
   // sendReplay is called with replayId, events, segment
