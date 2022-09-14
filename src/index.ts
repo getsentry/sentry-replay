@@ -107,7 +107,7 @@ export class SentryReplay implements Integration {
    */
   private newSessionCreated = false;
 
-  private flushQueue: Promise<unknown>[] = [];
+  private flushLock: Promise<unknown> | null = null;
 
   /**
    * Is the integration currently active?
@@ -962,21 +962,22 @@ export class SentryReplay implements Integration {
     // will be handled by queued flush
     clearTimeout(this.timeout);
 
-    // No existing flush in progress, proceed with flushing
-    if (this.flushQueue.length === 0) {
-      const promise = this.runFlush();
-      this.flushQueue.push(promise);
-      await promise;
-      this.flushQueue.pop();
+    // No existing flush in progress, proceed with flushing.
+    // this.flushLock acts as a lock so that future calls to `flushUpdate()`
+    // will be blocked until this promise resolves
+    if (!this.flushLock) {
+      this.flushLock = this.runFlush();
+      await this.flushLock;
+      this.flushLock = null;
       return;
     }
 
     // Wait for previous flush to finish, then call a throttled
-    // `flushUpdate()`. It's throttled because we could many other flush
-    // requests queued waiting for it to unlock. These other requests can be
-    // batched into a single flush.
+    // `flushUpdate()`. It's throttled because other flush
+    // requests could be queued waiting for it to resolve. These other requests
+    // will be batched into a single flush.
     try {
-      await Promise.all(this.flushQueue);
+      await this.flushLock;
     } catch (err) {
       console.error(err);
     } finally {
