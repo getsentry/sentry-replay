@@ -437,10 +437,6 @@ describe('SentryReplay', () => {
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
     expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
-    // Reset console.error mock to minimize the amount of time we are hiding
-    // console messages in case an error happens after
-    mockConsole.mockClear();
-
     mockCaptureEvent.mockReset();
     mockSendReplayRequest.mockReset();
     mockSendReplayRequest.mockImplementationOnce(() => {
@@ -451,7 +447,7 @@ describe('SentryReplay', () => {
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
 
     // next tick should retry and succeed
-    mockConsole.mockClear();
+    mockConsole.mockRestore();
     mockSendReplayRequest.mockReset();
     mockSendReplayRequest.mockImplementationOnce(() => {
       return Promise.resolve();
@@ -519,16 +515,10 @@ describe('SentryReplay', () => {
     expect(mockCaptureEvent).toHaveBeenCalledTimes(0);
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
 
-    // Reset console.error mock to minimize the amount of time we are hiding
-    // console messages in case an error happens after
-    mockConsole.mockClear();
-
     mockCaptureEvent.mockReset();
     await advanceTimers(5000);
     expect(mockCaptureEvent).toHaveBeenCalledTimes(0);
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(2);
-
-    mockConsole.mockClear();
 
     await advanceTimers(10000);
     expect(mockCaptureEvent).toHaveBeenCalledTimes(0);
@@ -538,6 +528,8 @@ describe('SentryReplay', () => {
     expect(mockCaptureEvent).toHaveBeenCalledTimes(0);
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(4);
     expect(replay.sendReplay).toHaveBeenCalledTimes(4);
+
+    mockConsole.mockReset();
 
     // Make sure it doesn't retry again
     jest.runAllTimers();
