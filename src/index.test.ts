@@ -490,8 +490,6 @@ describe('SentryReplay', () => {
       return Promise.resolve();
     });
     await advanceTimers(5000);
-    jest.runAllTimers();
-    await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
   });
 
