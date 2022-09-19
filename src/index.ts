@@ -140,7 +140,6 @@ export class SentryReplay implements Integration {
   session: Session | undefined;
 
   constructor({
-    startImmediately = true,
     flushMinDelay = 5000,
     flushMaxDelay = 15000,
     initialFlushDelay = 5000,
@@ -165,7 +164,6 @@ export class SentryReplay implements Integration {
     };
 
     this.options = {
-      startImmediately,
       flushMinDelay,
       flushMaxDelay,
       stickySession,
@@ -192,10 +190,6 @@ export class SentryReplay implements Integration {
    * other global event processors to finish
    */
   setupOnce() {
-    if (!this.options.startImmediately) {
-      return;
-    }
-
     // XXX: See method comments above
     window.setTimeout(() => this.start());
   }

@@ -68,11 +68,6 @@ export interface SentryReplayPluginOptions {
   stickySession?: boolean;
 
   /**
-   * Should the integration start recording immediately?
-   */
-  startImmediately?: boolean;
-
-  /**
    * Attempt to use compression when web workers are available
    *
    * (default is true)
