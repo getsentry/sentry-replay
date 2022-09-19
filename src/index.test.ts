@@ -90,7 +90,7 @@ describe('SentryReplay', () => {
       Object {
         "blockClass": "sentry-block",
         "emit": [Function],
-        "ignoreClass": "sr-test",
+        "ignoreClass": "sentry-test-ignore",
         "maskAllInputs": true,
         "maskTextClass": "sentry-mask",
       }
