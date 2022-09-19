@@ -140,6 +140,7 @@ export class SentryReplay implements Integration {
   session: Session | undefined;
 
   constructor({
+    startImmediately = true,
     flushMinDelay = 5000,
     flushMaxDelay = 15000,
     initialFlushDelay = 5000,
@@ -164,6 +165,7 @@ export class SentryReplay implements Integration {
     };
 
     this.options = {
+      startImmediately,
       flushMinDelay,
       flushMaxDelay,
       stickySession,
@@ -190,8 +192,12 @@ export class SentryReplay implements Integration {
    * other global event processors to finish
    */
   setupOnce() {
+    if (!this.options.startImmediately) {
+      return;
+    }
+
     // XXX: See method comments above
-    window.setTimeout(() => this.setup());
+    window.setTimeout(() => this.start());
   }
 
   /**
@@ -199,7 +205,7 @@ export class SentryReplay implements Integration {
    *
    * Creates or loads a session, attaches listeners to varying events (DOM, PerformanceObserver, Recording, Sentry SDK, etc)
    */
-  setup() {
+  start() {
     this.loadSession({ expiry: SESSION_IDLE_DURATION });
 
     // If there is no session, then something bad has happened - can't continue
@@ -299,7 +305,7 @@ export class SentryReplay implements Integration {
   /**
    * Currently, this needs to be manually called (e.g. for tests). Sentry SDK does not support a teardown
    */
-  destroy() {
+  stop() {
     logger.log('Stopping Replays');
     this.isEnabled = false;
     this.removeListeners();

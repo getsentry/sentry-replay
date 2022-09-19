@@ -48,15 +48,15 @@ Sentry.init({
 
 ### Stopping Replays
 
-To stop replays you can call the `destroy()` method on the integration instance. It's possible to resume recording by calling `setup()`.
+To stop replays you can call the `stop()` method on the integration instance. It's possible to resume recording by calling `setup()`.
 
 ```javascript
 
 const replay = new SentryReplay(); // This will begin recording replays
 
-replay.destroy(); // Stop recording
+replay.stop(); // Stop recording
 
-replay.setup(); // Start recording again
+replay.start(); // Start recording again
 ```
 
 ## Configuration
@@ -66,6 +66,7 @@ replay.setup(); // Start recording again
 | `flushMinDelay` | `number` | `5000` | The minimum time to wait (in ms) before sending the recording payload. The payload is sent if `flushMinDelay` ms have elapsed between two events. |
 | `flushMaxDelay` | `number` | `15000` | The maximum time to wait (in ms) when sending the recording payload. The payload is sent if events occur at an interval less than `flushMinDelay` and `flushMaxDelay` ms have elapsed since the last time a payload was sent. |
 | `initialFlushDelay` | `number` | `5000` | The amount of time to wait (in ms) before sending the initial recording payload. This helps drop recordings where users visit and close the page quickly. |
+| `startImmediately` | `boolean` | `true` | Should recording start immediately upon initialization? |
 | `stickySession` | `boolean` | `true` | Keep track of the user across page loads. Note a single user using multiple tabs will result in multiple sessions. Closing a tab will result in the session being closed as well. |
 | `useCompression` | `boolean` | `true` | Uses `WebWorkers` (if available) to compress the recording payload before uploading to Sentry. |
 | `captureOnlyOnError` | `boolean` | `false` | Only capture the recording when an error happens. |
