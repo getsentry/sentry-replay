@@ -71,6 +71,6 @@ replay.setup(); // Start recording again
 | `captureOnlyOnError` | `boolean` | `false` | Only capture the recording when an error happens. |
 | `replaysSamplingRate` | `number` | `1.0` | The rate at which to sample replays. (1.0 will collect all replays, 0 will collect no replays). |
 | `recordingConfig.maskAllInputs` | `boolean` | `true` | Mask all `<input>` elements |
-| `recordingConfig.blockClass` | `string` | `'sr-block'` | Redact all elements with the class name `sr-block` |
-| `recordingConfig.ignoreClass` | `string` | `'sr-ignore'` | Ignores all elements with the class name `sr-ignore` |
-| `recordingConfig.maskTextClass` | `string` | `'sr-mask'` | Mask all elements with the class name `sr-ignore` |
+| `recordingConfig.blockClass` | `string` | `'sentry-block'` | Redact all elements with the class name `sentry-block` |
+| `recordingConfig.ignoreClass` | `string` | `'sentry-ignore'` | Ignores all elements with the class name `sentry-ignore` |
+| `recordingConfig.maskTextClass` | `string` | `'sentry-mask'` | Mask all elements with the class name `sentry-ignore` |

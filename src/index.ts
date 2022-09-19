@@ -149,9 +149,9 @@ export class SentryReplay implements Integration {
     replaysSamplingRate = 1.0,
     recordingConfig: {
       maskAllInputs = true,
-      blockClass = 'sr-block',
-      ignoreClass = 'sr-ignore',
-      maskTextClass = 'sr-mask',
+      blockClass = 'sentry-block',
+      ignoreClass = 'sentry-ignore',
+      maskTextClass = 'sentry-mask',
       ...recordingOptions
     } = {},
   }: SentryReplayConfiguration = {}) {
