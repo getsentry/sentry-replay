@@ -1018,7 +1018,6 @@ export class SentryReplay implements Integration {
       events,
       headers: {
         segment_id,
-        sdk_version: __SENTRY_REPLAY_VERSION__,
       },
     });
 
