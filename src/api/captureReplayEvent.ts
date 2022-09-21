@@ -1,4 +1,4 @@
-import { captureEvent } from '@sentry/core';
+import { captureEvent, getCurrentHub } from '@sentry/core';
 
 import { REPLAY_EVENT_NAME } from '@/session/constants';
 import { InitialState } from '@/types';
@@ -51,6 +51,7 @@ export function captureReplayEvent({
   traceIds,
   urls,
 }: CaptureReplayEventParams) {
+  getCurrentHub()?.setTag('replay_sdk_version', __SENTRY_REPLAY_VERSION__);
   captureEvent(
     {
       // @ts-expect-error replay_event is a new event type
@@ -64,7 +65,6 @@ export function captureReplayEvent({
       urls,
       replay_id,
       segment_id,
-      replay_sdk_version: __SENTRY_REPLAY_VERSION__,
     },
     { event_id: replay_id }
   );
