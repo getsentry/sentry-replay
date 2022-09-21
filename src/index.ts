@@ -8,6 +8,7 @@ import {
 import { Breadcrumb, Event, Integration } from '@sentry/types';
 import { addInstrumentationHandler } from '@sentry/utils';
 import { createEnvelope, serializeEnvelope } from '@sentry/utils';
+import debounce from 'lodash.debounce';
 import throttle from 'lodash.throttle';
 import { EventType, record } from 'rrweb';
 
@@ -28,7 +29,6 @@ import { Session } from './session/Session';
 import createBreadcrumb from './util/createBreadcrumb';
 import { createPayload } from './util/createPayload';
 import { dedupeNavigationEntries } from './util/dedupeNavigationEntries';
-import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 import {
@@ -86,11 +86,6 @@ export class SentryReplay implements Integration {
   readonly options: SentryReplayPluginOptions;
 
   /**
-   * setTimeout id used for debouncing sending rrweb attachments
-   */
-  private timeout: number;
-
-  /**
    * The timestamp of the first event since the last flush. This is used to
    * determine if the maximum allowed time has passed before events should be
    * flushed again.
@@ -101,6 +96,8 @@ export class SentryReplay implements Integration {
 
   private retryCount = 0;
   private retryInterval = BASE_RETRY_INTERVAL;
+
+  private debouncedFlush: ReturnType<typeof debounce>;
 
   /**
    * Flag when a new session has been created. Captured replay events behave
@@ -188,6 +185,14 @@ export class SentryReplay implements Integration {
       // content masked.
       this.recordingOptions.maskTextSelector = '*';
     }
+
+    this.debouncedFlush = debounce(
+      () => this.flush(),
+      this.options.flushMinDelay,
+      {
+        maxWait: this.options.flushMaxDelay,
+      }
+    );
   }
 
   /**
@@ -263,11 +268,6 @@ export class SentryReplay implements Integration {
       this.initialEventTimestampSinceFlush = now;
     }
 
-    // Do not finish the replay event if we receive a new replay event
-    if (this.timeout) {
-      window.clearTimeout(this.timeout);
-    }
-
     // We need to always run `cb` (e.g. in the case of captureOnlyOnError == true)
     const cbResult = cb?.();
 
@@ -283,27 +283,7 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    const flushMaxDelayExceeded = isExpired(
-      this.initialEventTimestampSinceFlush,
-      this.options.flushMaxDelay,
-      now
-    );
-
-    // If `flushMaxDelayExceeded` is true, then we should finish the replay event immediately,
-    // Otherwise schedule it to be finished in `this.options.flushMinDelay`
-    if (flushMaxDelayExceeded) {
-      logger.log('replay max delay exceeded, finishing replay event');
-      this.flush();
-      return;
-    }
-
-    // Set timer to finish replay event and send replay attachment to
-    // Sentry. Will be cancelled if an event happens before `flushMinDelay`
-    // elapses.
-    this.timeout = window.setTimeout(() => {
-      logger.log('replay timeout exceeded, finishing replay event');
-      this.flush();
-    }, this.options.flushMinDelay);
+    this.debouncedFlush();
   }
 
   /**
@@ -646,6 +626,9 @@ export class SentryReplay implements Integration {
             payload: result,
           },
         });
+
+        // Do not flush after console log messages
+        return result.category === 'console';
       });
     };
 
@@ -939,9 +922,6 @@ export class SentryReplay implements Integration {
     // Only attach memory event if eventBuffer is not empty
     await this.addMemoryEntry();
 
-    // Save the timestamp before sending replay because `captureEvent` should
-    // only be called after successfully uploading a replay
-    const timestamp = new Date().getTime();
     // NOTE: Copy values from instance members, as it's possible they could
     // change before the flush finishes.
     const replayId = this.session.id;
@@ -960,7 +940,7 @@ export class SentryReplay implements Integration {
 
       // The below will only happen after successfully sending replay //
       captureReplayEvent({
-        ...this.popEventContext({ timestamp }),
+        ...this.popEventContext({ timestamp: new Date().getTime() }),
         replayId,
         segmentId,
         includeReplayStartTimestamp: newSessionCreated,
@@ -998,7 +978,7 @@ export class SentryReplay implements Integration {
     // Since flushing, ensure other queued flushes are cancelled
     // We do this regardless of having a queued flush since the event updates
     // will be handled by queued flush
-    clearTimeout(this.timeout);
+    this.debouncedFlush?.cancel();
 
     // No existing flush in progress, proceed with flushing.
     // this.flushLock acts as a lock so that future calls to `flush()`
