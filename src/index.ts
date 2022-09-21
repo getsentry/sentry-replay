@@ -1018,6 +1018,7 @@ export class SentryReplay implements Integration {
       events,
       headers: {
         segment_id,
+        sdk_version: __SENTRY_REPLAY_VERSION__,
       },
     });
 
@@ -1025,7 +1026,10 @@ export class SentryReplay implements Integration {
       {
         event_id,
         sent_at: new Date().toISOString(),
-        sdk: { name: 'sentry.javascript.integration.replay', version: '1.0.0' },
+        sdk: {
+          name: 'sentry.javascript.integration.replay',
+          version: __SENTRY_REPLAY_VERSION__,
+        },
       },
       [
         [
