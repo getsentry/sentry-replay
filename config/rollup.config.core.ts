@@ -1,3 +1,5 @@
+import commonjs from '@rollup/plugin-commonjs';
+import { nodeResolve } from '@rollup/plugin-node-resolve';
 import replace from '@rollup/plugin-replace';
 import typescript from '@rollup/plugin-typescript';
 import { defineConfig } from 'rollup';
@@ -19,8 +21,10 @@ const config = defineConfig({
       format: 'esm',
     },
   ],
-  external: [...Object.keys(pkg.dependencies || {})],
+  external: [...Object.keys(pkg.peerDependencies || {})],
   plugins: [
+    commonjs(),
+    nodeResolve(),
     typescript({
       tsconfig: IS_PRODUCTION
         ? './config/tsconfig.core.json'
