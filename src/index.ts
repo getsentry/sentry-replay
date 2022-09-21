@@ -645,6 +645,9 @@ export class SentryReplay implements Integration {
             payload: result,
           },
         });
+
+        // Do not flush after console log messages
+        return result.category === 'console';
       });
     };
 
