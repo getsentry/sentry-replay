@@ -64,7 +64,7 @@ export function captureReplayEvent({
       urls,
       replay_id,
       segment_id,
-      sdk_version: __SENTRY_REPLAY_VERSION__,
+      replay_sdk_version: __SENTRY_REPLAY_VERSION__,
     },
     { event_id: replay_id }
   );
