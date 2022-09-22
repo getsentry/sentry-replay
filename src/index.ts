@@ -28,7 +28,7 @@ import { getSession } from './session/getSession';
 import { Session } from './session/Session';
 import createBreadcrumb from './util/createBreadcrumb';
 import { createPayload } from './util/createPayload';
-import { dedupeNavigationEntries } from './util/dedupeNavigationEntries';
+import { dedupePerformanceEntries } from './util/dedupePerformanceEntries';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 import {
@@ -638,20 +638,11 @@ export class SentryReplay implements Integration {
   handlePerformanceObserver = (list: PerformanceObserverEntryList) => {
     // For whatever reason the observer was returning duplicate navigation
     // entries (the other entry types were not duplicated).
-    const newNavigationEntries = dedupeNavigationEntries(
+    const newPerformanceEntries = dedupePerformanceEntries(
       this.performanceEvents,
-      list.getEntriesByType('navigation') as PerformanceNavigationTiming[]
+      list.getEntries()
     );
-
-    const otherEntries = list
-      .getEntries()
-      .filter(({ entryType }) => entryType !== 'navigation');
-
-    this.performanceEvents = [
-      ...this.performanceEvents,
-      ...newNavigationEntries,
-      ...otherEntries,
-    ];
+    this.performanceEvents = newPerformanceEntries;
   };
 
   /**

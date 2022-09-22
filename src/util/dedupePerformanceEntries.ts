@@ -1,9 +1,3 @@
-function isNavigationEntry(
-  entry: PerformanceEntry
-): entry is PerformanceNavigationTiming {
-  return entry.entryType === 'navigation';
-}
-
 const NAVIGATION_ENTRY_KEYS: Array<keyof PerformanceNavigationTiming> = [
   'name',
   'type',
@@ -27,39 +21,79 @@ function isNavigationEntryEqual(a: PerformanceNavigationTiming) {
  *
  * Compare the values of several keys to determine if the entries are duplicates or not.
  */
-export function dedupeNavigationEntries(
+export function dedupePerformanceEntries(
   currentList: PerformanceEntryList,
-  newList: PerformanceNavigationTiming[]
+  newList: PerformanceEntryList
 ) {
-  const existingNavigationEntries = currentList.filter(isNavigationEntry);
+  // Partition `currentList` into 3 different lists based on entryType
+  const [existingNavigationEntries, existingLcpEntries, existingEntries] =
+    currentList.reduce(
+      (
+        acc: [
+          PerformanceNavigationTiming[],
+          PerformancePaintTiming[],
+          PerformanceEntryList
+        ],
+        entry
+      ) => {
+        if (entry.entryType === 'navigation') {
+          acc[0].push(entry as PerformanceNavigationTiming);
+        } else if (entry.entryType === 'largest-contentful-paint') {
+          acc[1].push(entry as PerformancePaintTiming);
+        } else {
+          acc[2].push(entry);
+        }
+        return acc;
+      },
+      [[], [], []]
+    );
 
-  // Ignore any navigation entries with duration 0, as they are likely duplicates
-  const newNavigationEntriesWithDuration = newList.filter(
-    ({ duration }) => duration > 0
-  );
+  const newEntries: PerformanceEntryList = [];
+  const newNavigationEntries: PerformanceNavigationTiming[] = [];
+  let newLcpEntry: PerformancePaintTiming | undefined =
+    existingLcpEntries.length
+      ? existingLcpEntries[existingLcpEntries.length - 1] // Take the last element as list is sorted
+      : undefined;
 
-  // Ensure new entries do not already exist in existing entries
-  const newNavigationEntries = newNavigationEntriesWithDuration.filter(
-    (entry) => !existingNavigationEntries.find(isNavigationEntryEqual(entry))
-  );
-
-  // If there is only one result, nothing to de-dupe, carry on
-  if (newNavigationEntries.length <= 1) {
-    return newNavigationEntries;
-  }
-
-  // Otherwise we now need to make sure items in the new list are unique. Can't
-  // use a Set because objects refs are different (values are the same)
-  return newNavigationEntries.reduce(
-    (
-      acc: PerformanceNavigationTiming[],
-      entry: PerformanceNavigationTiming
-    ) => {
-      if (!acc.find(isNavigationEntryEqual(entry))) {
-        acc.push(entry);
+  newList.forEach((entry) => {
+    if (entry.entryType === 'largest-contentful-paint') {
+      // We want the latest LCP event only
+      if (!newLcpEntry || newLcpEntry.startTime < entry.startTime) {
+        newLcpEntry = entry;
       }
-      return acc;
-    },
-    []
-  );
+      return;
+    }
+
+    if (entry.entryType === 'navigation') {
+      const navigationEntry = entry as PerformanceNavigationTiming;
+
+      // Check if the navigation entry is contained in currentList or newList
+      if (
+        // Ignore any navigation entries with duration 0, as they are likely duplicates
+        entry.duration > 0 &&
+        // Ensure new entry does not already exist in existing entries
+        !existingNavigationEntries.find(
+          isNavigationEntryEqual(navigationEntry)
+        ) &&
+        // Ensure new entry does not already exist in new list of navigation entries
+        !newNavigationEntries.find(isNavigationEntryEqual(navigationEntry))
+      ) {
+        newNavigationEntries.push(navigationEntry);
+      }
+
+      // Otherwise this navigation entry is considered a duplicate and is thrown away
+      return;
+    }
+
+    newEntries.push(entry);
+  });
+
+  // Re-combine and sort by startTime
+  return [
+    ...(newLcpEntry ? [newLcpEntry] : []),
+    ...existingNavigationEntries,
+    ...existingEntries,
+    ...newEntries,
+    ...newNavigationEntries,
+  ].sort((a, b) => a.startTime - b.startTime);
 }
