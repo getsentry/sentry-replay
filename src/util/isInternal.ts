@@ -3,5 +3,5 @@
  * (e.g. on https://sentry.io )
  */
 export function isInternal() {
-  return window.location.host === 'sentry.io';
+  return ['sentry.io', 'dev.getsentry.net'].includes(window.location.host);
 }
