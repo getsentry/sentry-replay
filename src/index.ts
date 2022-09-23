@@ -897,6 +897,8 @@ export class SentryReplay implements Integration {
    *
    * Performance events are only added right before flushing - this is
    * due to the buffered performance observer events.
+   *
+   * Should never be called directly, only by `flush`
    */
   async runFlush() {
     if (!this.session) {
@@ -966,9 +968,7 @@ export class SentryReplay implements Integration {
       return;
     }
 
-    // Since flushing, ensure other queued flushes are cancelled
-    // We do this regardless of having a queued flush since the event updates
-    // will be handled by queued flush
+    // A flush is about to happen, cancel any queued flushes
     this.debouncedFlush?.cancel();
 
     // No existing flush in progress, proceed with flushing.
