@@ -281,6 +281,8 @@ export class SentryReplay implements Integration {
       return;
     }
 
+    // addUpdate is called quite frequently - use debouncedFlush so that it
+    // respects the flush delays and does not flush immediately
     this.debouncedFlush();
   }
 
