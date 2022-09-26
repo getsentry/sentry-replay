@@ -60,6 +60,8 @@ const BASE_RETRY_INTERVAL = 5000;
 const MAX_RETRY_COUNT = 3;
 const UNABLE_TO_SEND_REPLAY = 'Unable to send Replay';
 
+let _initialized = false;
+
 export class SentryReplay implements Integration {
   /**
    * @inheritDoc
@@ -186,6 +188,13 @@ export class SentryReplay implements Integration {
         maxWait: this.options.flushMaxDelay,
       }
     );
+
+    if (_initialized) {
+      throw new Error(
+        'Multiple Sentry Session Replay instances are not supported'
+      );
+    }
+    _initialized = true;
   }
 
   /**
