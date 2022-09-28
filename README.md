@@ -1,14 +1,12 @@
 # sentry-replay
 
-This integration is a WIP.
+Note: This integration is currently a work-in-progress.
 
 ## Pre-Requisites
 
-For the sentry-replay integration to work, you must have the [Sentry browser SDK package](https://www.npmjs.com/package/@sentry/browser) installed.
+For the sentry-replay integration to work, you must have the [Sentry browser SDK package](https://www.npmjs.com/package/@sentry/browser) (or an equivalent framework SDK e.g. [@sentry/react](https://www.npmjs.com/package/@sentry/react)) installed.
 
 ## Installation
-
-To install the stable version:
 
 with npm:
 
