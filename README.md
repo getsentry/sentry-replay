@@ -25,7 +25,7 @@ yarn add @sentry/browser @sentry/replay
 ## Setup
 
 To set up the integration add the following to your Sentry initialization. Several options are supported and passable via the integration constructor.
-See the rrweb documentation for advice on configuring these values.
+See the [configuration section](#configuration) below for more details.
 
 ```javascript
 import * as Sentry from '@sentry/browser';
