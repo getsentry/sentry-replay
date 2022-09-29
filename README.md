@@ -2,7 +2,7 @@
 
 Note: This integration is currently a work-in-progress.
 
-## Pre-Requisites
+## Pre-requisites
 
 For the sentry-replay integration to work, you must have the [Sentry browser SDK package](https://www.npmjs.com/package/@sentry/browser) (or an equivalent framework SDK e.g. [@sentry/react](https://www.npmjs.com/package/@sentry/react)) installed.
 
@@ -22,7 +22,7 @@ yarn add @sentry/browser @sentry/replay
 
 ## Setup
 
-To set up the integration add the following to your Sentry initialization. Several options are supported and passable via the integration constructor.
+To set up the integration, add the following to your Sentry initialization. Several options are supported and passable via the integration constructor.
 See the [configuration section](#configuration) below for more details.
 
 ```javascript
@@ -36,7 +36,7 @@ Sentry.init({
 });
 ```
 
-### Stop Recording
+### Start and Stop Recording
 
 Replay recording only starts automatically when it is included in the `integrations` key when calling `Sentry.init`. Otherwise you can initialize the plugin and manually call the `start()` method on the integration instance. To stop recording you can call the `stop()`.
 
@@ -63,10 +63,10 @@ replay.stop(); // Stop recording
 
 | key              | type                     | default                             | description                                                                                                                                                                                         |
 | ---------------- | ------------------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| maskAllText      | boolean                  | `true`                             | Mask _all_ text content. Will pass text content through `maskTextFn` before sending to server                                                                                                       |
+| maskAllText      | boolean                  | `true`                              | Mask _all_ text content. Will pass text content through `maskTextFn` before sending to server.                                                                                                       |
 | maskTextFn       | (text: string) => string | `(text) => '*'.repeat(text.length)` | Function to customize how text content is masked before sending to server. By default, masks text with `*`.                                                                                         |
-| maskAllInputs    | boolean                  | `true`                              | Mask values of `<input>` elements. Passes input values through `maskInputFn` before sending to server                                                                                               |
-| maskInputOptions | Record<string, boolean>  | `{ password: true }`                | Customize which inputs `type` to mask. <br /> Available `<input>` types: `color, date, datetime-local, email, month, number, range, search, tel, text, time, url, week, textarea, select, password` |
+| maskAllInputs    | boolean                  | `true`                              | Mask values of `<input>` elements. Passes input values through `maskInputFn` before sending to server.                                                                                               |
+| maskInputOptions | Record<string, boolean>  | `{ password: true }`                | Customize which inputs `type` to mask. <br /> Available `<input>` types: `color, date, datetime-local, email, month, number, range, search, tel, text, time, url, week, textarea, select, password`. |
 | maskInputFn      | (text: string) => string | `(text) => '*'.repeat(text.length)` | Function to customize how form input values are masked before sending to server. By default, masks values with `*`.                                                                                 |
 | blockClass       | string \| RegExp         | `'sentry-block'`                    | Redact all elements that match the class name. See [privacy](#blocking) section for an example.                                                                                                                                                      |
 | blockSelector    | string                   | `[data-sentry-block]`               | Redact all elements that match the DOM selector. See [privacy](#blocking) section for an example.                                                                                                                                                     |
