@@ -81,7 +81,7 @@
     "singleQuote": true
   },
   "lint-staged": {
-    "*.{js,jix,ts,tsx}": "yarn eslint --cache --fix"
+    "*.{js,jsx,ts,tsx}": "yarn eslint --cache --fix"
   },
   "size-limit": [
     {
