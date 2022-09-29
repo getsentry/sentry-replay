@@ -88,11 +88,11 @@ There are several ways to deal with PII. By default, the integration will mask a
 
 ### Masking
 Masking replaces the text content with something else. The default masking behavior is to replace each character with a `*`.
-![Masking example](https://user-images.githubusercontent.com/79684/192808500-cedb3d25-a3bb-4962-b2f5-fe15f6f4d522.png)
+![Masking example](https://user-images.githubusercontent.com/79684/193118192-dee1d3d8-5813-47e8-b532-f9ee1c8714b3.png)
 
 ### Blocking
 Blocking replaces the element with a placeholder that has the same dimensions. The recording will show an empty space where the content was.
-![image](https://user-images.githubusercontent.com/79684/192809669-b0b6f989-2c78-4e36-aa2a-d2fe959f4516.png)
+![Blocking example](https://user-images.githubusercontent.com/79684/193118084-51a589fc-2160-476a-a8dc-b681eddb136c.png)
 
 ### Ignoring
 Ignoring only applies to form inputs. Events will be ignored on the input element so that the replay does not show what occurs inside of the input. In the below example, notice how the results in the table below the input changes, but no text is visible in the input.
