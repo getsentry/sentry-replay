@@ -91,7 +91,7 @@ Masking replaces the text content with something else. The default masking behav
 ![Masking example](https://user-images.githubusercontent.com/79684/193118192-dee1d3d8-5813-47e8-b532-f9ee1c8714b3.png)
 
 ### Blocking
-Blocking replaces the element with a placeholder that has the same dimensions. The recording will show an empty space where the content was.
+Blocking replaces the element with a placeholder that has the same dimensions. The recording will show an empty space where the content was. In this example the relevant html code is: `<table data-sentry-block>`.
 ![Blocking example](https://user-images.githubusercontent.com/79684/193118084-51a589fc-2160-476a-a8dc-b681eddb136c.png)
 
 ### Ignoring
