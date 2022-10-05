@@ -87,7 +87,7 @@ replay.stop(); // Stop recording
 There are several ways to deal with PII. By default, the integration will mask all text content with `*`. This can be disabled by setting `maskAllText` to `false`. It is also possible to add the following CSS classes to specific DOM elements to prevent recording its contents: `sentry-block`, `sentry-ignore`, and `sentry-mask`. The following sections will show examples of how content is handled by the differing methods.
 
 ### Masking
-Masking replaces the text content with something else. The default masking behavior is to replace each character with a `*`.
+Masking replaces the text content with something else. The default masking behavior is to replace each character with a `*`. In this example the relevant html code is: <table class="sentry-mask">...</table>`.
 ![Masking example](https://user-images.githubusercontent.com/79684/193118192-dee1d3d8-5813-47e8-b532-f9ee1c8714b3.png)
 
 ### Blocking
