@@ -59,7 +59,8 @@ type AddUpdateCallback = () => boolean | void;
 const BASE_RETRY_INTERVAL = 5000;
 const MAX_RETRY_COUNT = 3;
 const UNABLE_TO_SEND_REPLAY = 'Unable to send Replay';
-const MEDIA_SELECTORS = 'img,svg,video,object,picture,embed,map,audio';
+const MEDIA_SELECTORS =
+  'img,svg,path,rect,area,video,object,picture,embed,map,audio';
 
 export class Replay implements Integration {
   /**
