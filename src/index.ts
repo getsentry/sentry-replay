@@ -43,12 +43,12 @@ import type {
   InstrumentationTypeBreadcrumb,
   InstrumentationTypeSpan,
   RecordedEvents,
-  RecordingConfig,
   RecordingEvent,
+  RecordingOptions,
+  ReplayConfiguration,
   ReplayEventContext,
+  ReplayPluginOptions,
   ReplayRequest,
-  SentryReplayConfiguration,
-  SentryReplayPluginOptions,
 } from './types';
 
 /**
@@ -59,10 +59,12 @@ type AddUpdateCallback = () => boolean | void;
 const BASE_RETRY_INTERVAL = 5000;
 const MAX_RETRY_COUNT = 3;
 const UNABLE_TO_SEND_REPLAY = 'Unable to send Replay';
+const MEDIA_SELECTORS =
+  'img,image,svg,path,rect,area,video,object,picture,embed,map,audio';
 
 let _initialized = false;
 
-export class SentryReplay implements Integration {
+export class Replay implements Integration {
   /**
    * @inheritDoc
    */
@@ -71,7 +73,7 @@ export class SentryReplay implements Integration {
   /**
    * @inheritDoc
    */
-  public name: string = SentryReplay.id;
+  public name: string = Replay.id;
 
   public eventBuffer: IEventBuffer | null;
 
@@ -83,9 +85,9 @@ export class SentryReplay implements Integration {
   /**
    * Options to pass to `rrweb.record()`
    */
-  readonly recordingOptions: RecordingConfig;
+  readonly recordingOptions: RecordingOptions;
 
-  readonly options: SentryReplayPluginOptions;
+  readonly options: ReplayPluginOptions;
 
   private performanceObserver: PerformanceObserver | null = null;
 
@@ -140,20 +142,21 @@ export class SentryReplay implements Integration {
     useCompression = true,
     captureOnlyOnError = false,
     replaysSamplingRate = 1.0,
-    maskAllText = false,
-    recordingConfig: {
-      maskAllInputs = true,
-      blockClass = 'sentry-block',
-      ignoreClass = 'sentry-ignore',
-      maskTextClass = 'sentry-mask',
-      ...recordingOptions
-    } = {},
-  }: SentryReplayConfiguration = {}) {
+    maskAllText = true,
+    maskAllInputs = true,
+    blockAllMedia = true,
+    blockClass = 'sentry-block',
+    ignoreClass = 'sentry-ignore',
+    maskTextClass = 'sentry-mask',
+    blockSelector = '[data-sentry-block]',
+    ...recordingOptions
+  }: ReplayConfiguration = {}) {
     this.recordingOptions = {
       maskAllInputs,
       blockClass,
       ignoreClass,
       maskTextClass,
+      blockSelector,
       ...recordingOptions,
     };
 
@@ -166,6 +169,7 @@ export class SentryReplay implements Integration {
       replaysSamplingRate,
       useCompression,
       maskAllText,
+      blockAllMedia,
     };
 
     // Modify rrweb options to checkoutEveryNthSecond if this is defined, as we don't know when an error occurs, so we want to try to minimize the number of events captured.
@@ -179,6 +183,14 @@ export class SentryReplay implements Integration {
       // `maskTextSelector`. This means that all nodes will have their text
       // content masked.
       this.recordingOptions.maskTextSelector = '*';
+    }
+
+    if (this.options.blockAllMedia) {
+      // `blockAllMedia` is a more user friendly option to configure blocking
+      // embedded media elements
+      this.recordingOptions.blockSelector = !this.recordingOptions.blockSelector
+        ? MEDIA_SELECTORS
+        : `${this.recordingOptions.blockSelector},${MEDIA_SELECTORS}`;
     }
 
     this.debouncedFlush = debounce(
@@ -512,6 +524,16 @@ export class SentryReplay implements Integration {
       // for a set amount of time before flushing. This can help avoid
       // capturing replays of users that immediately close the window.
       setTimeout(() => this.conditionalFlush(), this.options.initialFlushDelay);
+
+      // Cancel any previously debounced flushes to ensure there are no [near]
+      // simultaneous flushes happening. The latter request should be
+      // insignificant in this case, so wait for additional user interaction to
+      // trigger a new flush.
+      //
+      // This can happen because there's no guarantee that a recording event
+      // happens first. e.g. a mouse click can happen and trigger a debounced
+      // flush before the checkout.
+      this.debouncedFlush?.cancel();
 
       return true;
     });

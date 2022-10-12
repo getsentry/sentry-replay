@@ -1,8 +1,7 @@
-import { record } from 'rrweb';
-import type { eventWithTime } from 'rrweb/typings/types';
+import type { eventWithTime, recordOptions } from 'rrweb/typings/types';
 
 export type RecordingEvent = eventWithTime;
-export type RecordingConfig = Parameters<typeof record>[0];
+export type RecordingOptions = recordOptions<eventWithTime>;
 
 export type RecordedEvents = Uint8Array | string;
 
@@ -50,7 +49,7 @@ export interface WorkerResponse {
   response: string | Uint8Array;
 }
 
-export interface SentryReplayPluginOptions {
+export interface ReplayPluginOptions {
   /**
    * The amount of time to wait before sending a replay
    */
@@ -92,14 +91,16 @@ export interface SentryReplayPluginOptions {
    * Mask all text in recordings. All text will be replaced with asterisks by default.
    */
   maskAllText?: boolean;
+
+  /**
+   * Block all media (e.g. images, svg, video) in recordings.
+   */
+  blockAllMedia?: boolean;
 }
 
-export interface SentryReplayConfiguration extends SentryReplayPluginOptions {
-  /**
-   * Options for `rrweb.record()`
-   */
-  recordingConfig?: RecordingConfig;
-}
+export interface ReplayConfiguration
+  extends ReplayPluginOptions,
+    RecordingOptions {}
 
 /**
  * Some initial state captured before creating a root replay event

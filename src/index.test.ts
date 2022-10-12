@@ -3,7 +3,7 @@ import * as SentryUtils from '@sentry/utils';
 import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
 
-import { SentryReplay } from '@';
+import { Replay } from '@';
 import * as CaptureReplayEvent from '@/api/captureReplayEvent';
 import {
   REPLAY_SESSION_KEY,
@@ -18,8 +18,8 @@ async function advanceTimers(time: number) {
   await new Promise(process.nextTick);
 }
 
-describe('SentryReplay', () => {
-  let replay: SentryReplay;
+describe('Replay', () => {
+  let replay: Replay;
   const prevLocation = window.location;
 
   type MockSendReplayRequest = jest.MockedFunction<
@@ -52,6 +52,9 @@ describe('SentryReplay', () => {
     jest.spyOn(replay, 'sendReplayRequest');
     mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
     jest.runAllTimers();
+    jest.spyOn(replay, 'flush');
+    jest.spyOn(replay, 'runFlush');
+    // const mockFlush = replay.flush as MockFlush;
   });
 
   beforeEach(() => {
@@ -90,10 +93,12 @@ describe('SentryReplay', () => {
     expect(mockRecord.mock.calls[0][0]).toMatchInlineSnapshot(`
       Object {
         "blockClass": "sentry-block",
+        "blockSelector": "[data-sentry-block],img,image,svg,path,rect,area,video,object,picture,embed,map,audio",
         "emit": [Function],
         "ignoreClass": "sentry-test-ignore",
         "maskAllInputs": true,
         "maskTextClass": "sentry-mask",
+        "maskTextSelector": "*",
       }
     `);
   });
@@ -768,5 +773,23 @@ describe('SentryReplay', () => {
     // This gets reset after sending replay
     // @ts-expect-error private member
     expect(replay.context.earliestEvent).toBe(null);
+  });
+
+  it('has single flush when checkout flush and debounce flush happen near simultaneously', async () => {
+    // click happens first
+    domHandler({
+      name: 'click',
+    });
+
+    // checkout
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    mockRecord._emitter(TEST_EVENT);
+
+    await advanceTimers(5000);
+    expect(replay.flush).toHaveBeenCalledTimes(1);
+
+    // Make sure there's nothing queued up after
+    await advanceTimers(5000);
+    expect(replay.flush).toHaveBeenCalledTimes(1);
   });
 });

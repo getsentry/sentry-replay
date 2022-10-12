@@ -3,11 +3,11 @@ jest.unmock('@sentry/browser');
 import { BrowserOptions, init } from '@sentry/browser';
 import { Transport } from '@sentry/types';
 
-import { SentryReplay } from '@';
-import { SentryReplayConfiguration } from '@/types';
+import { Replay } from '@';
+import { ReplayConfiguration } from '@/types';
 
 interface MockSdkParams {
-  replayOptions?: SentryReplayConfiguration;
+  replayOptions?: ReplayConfiguration;
   sentryOptions?: BrowserOptions;
 }
 
@@ -39,7 +39,7 @@ class MockTransport implements Transport {
 export function mockSdk({
   replayOptions = {
     stickySession: true,
-    recordingConfig: { ignoreClass: 'sentry-test-ignore' },
+    ignoreClass: 'sentry-test-ignore',
   },
   sentryOptions = {
     dsn: 'https://dsn@ingest.f00.f00/1',
@@ -48,7 +48,7 @@ export function mockSdk({
     transport: () => new MockTransport(),
   },
 }: MockSdkParams = {}) {
-  const replay = new SentryReplay(replayOptions);
+  const replay = new Replay(replayOptions);
 
   init({ ...sentryOptions, integrations: [replay] });
   jest.spyOn(replay, 'sendReplayRequest');
