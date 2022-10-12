@@ -10,7 +10,7 @@ it('sets the correct configuration when `blockSelector` is empty and `blockAllMe
   const { replay } = mockSdk({ replayOptions: { blockSelector: '' } });
 
   expect(replay.recordingOptions.blockSelector).toMatchInlineSnapshot(
-    `"img,svg,path,rect,area,video,object,picture,embed,map,audio"`
+    `"img,image,svg,path,rect,area,video,object,picture,embed,map,audio"`
   );
 });
 
@@ -20,6 +20,6 @@ it('preserves `blockSelector` when `blockAllMedia` is enabled', () => {
   });
 
   expect(replay.recordingOptions.blockSelector).toMatchInlineSnapshot(
-    `"[data-test-blockSelector],img,svg,path,rect,area,video,object,picture,embed,map,audio"`
+    `"[data-test-blockSelector],img,image,svg,path,rect,area,video,object,picture,embed,map,audio"`
   );
 });
