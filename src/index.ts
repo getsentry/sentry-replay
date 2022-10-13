@@ -1037,24 +1037,29 @@ ${stack.slice(1).join('\n')}`,
       getCurrentHub()
         // @ts-expect-error private api
         ?._withClient(async (client, scope) => {
-          resolve(
-            await client._processEvent(
-              {
-                type: REPLAY_EVENT_NAME,
-                ...(includeReplayStartTimestamp
-                  ? { replay_start_timestamp: initialState.timestamp / 1000 }
-                  : {}),
-                timestamp: timestamp / 1000,
-                error_ids: errorIds,
-                trace_ids: traceIds,
-                urls,
-                replay_id: event_id,
-                segment_id,
-              },
-              { event_id },
-              scope
-            )
+          // XXX: This event does not trigger `beforeSend` in SDK
+          const preparedEvent = await client._prepareEvent(
+            {
+              type: REPLAY_EVENT_NAME,
+              ...(includeReplayStartTimestamp
+                ? { replay_start_timestamp: initialState.timestamp / 1000 }
+                : {}),
+              timestamp: timestamp / 1000,
+              error_ids: errorIds,
+              trace_ids: traceIds,
+              urls,
+              replay_id: event_id,
+              segment_id,
+            },
+            { event_id },
+            scope
           );
+          const session = scope && scope.getSession();
+          if (session) {
+            client._updateSessionFromEvent(session, preparedEvent);
+          }
+
+          resolve(preparedEvent);
         });
     });
 
