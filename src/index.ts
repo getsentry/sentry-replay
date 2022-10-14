@@ -10,10 +10,6 @@ import { createEnvelope, serializeEnvelope } from '@sentry/utils';
 import debounce from 'lodash.debounce';
 import { EventType, record } from 'rrweb';
 
-// import {
-//   captureReplayEvent,
-//   CaptureReplayEventParams,
-// } from './api/captureReplayEvent';
 import { getBreadcrumbHandler } from './coreHandlers/getBreadcrumbHandler';
 import { getSpanHandler } from './coreHandlers/getSpanHandler';
 import {
@@ -946,14 +942,6 @@ ${stack.slice(1).join('\n')}`,
         segmentId,
         includeReplayStartTimestamp: newSessionCreated,
       });
-
-      // The below will only happen after successfully sending replay //
-      // captureReplayEvent({
-      //   ...this.popEventContext({ timestamp: new Date().getTime() }),
-      //   replayId,
-      //   segmentId,
-      //   includeReplayStartTimestamp: newSessionCreated,
-      // });
       this.newSessionCreated = false;
     } catch (err) {
       captureInternalException(err);
