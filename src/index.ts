@@ -1033,6 +1033,11 @@ ${stack.slice(1).join('\n')}`,
 
     const timestamp = new Date().getTime();
 
+    const sdkInfo = {
+      name: 'sentry.javascript.integration.replay',
+      version: __SENTRY_REPLAY_VERSION__,
+    };
+
     const replayEvent = await new Promise((resolve) => {
       getCurrentHub()
         // @ts-expect-error private api
@@ -1058,6 +1063,10 @@ ${stack.slice(1).join('\n')}`,
           if (session) {
             client._updateSessionFromEvent(session, preparedEvent);
           }
+          preparedEvent.sdk = {
+            ...preparedEvent.sdk,
+            ...sdkInfo,
+          };
 
           resolve(preparedEvent);
         });
@@ -1067,10 +1076,7 @@ ${stack.slice(1).join('\n')}`,
       {
         event_id,
         sent_at: new Date().toISOString(),
-        sdk: {
-          name: 'sentry.javascript.integration.replay',
-          version: __SENTRY_REPLAY_VERSION__,
-        },
+        sdk: sdkInfo,
       },
       [
         // @ts-expect-error New types
