@@ -3,13 +3,14 @@ import * as SentryUtils from '@sentry/utils';
 import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
 
-import { Replay } from '@';
-import * as CaptureReplayEvent from '@/api/captureReplayEvent';
+import * as CaptureReplayEvent from './api/captureReplayEvent';
 import {
   REPLAY_SESSION_KEY,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
-} from '@/session/constants';
+} from './session/constants';
+import * as CaptureInternalException from './util/captureInternalException';
+import { Replay } from './';
 
 jest.useFakeTimers({ advanceTimers: true });
 
@@ -37,6 +38,8 @@ describe('Replay', () => {
   const mockCaptureEvent = SentryCore.captureEvent as jest.MockedFunction<
     typeof SentryCore.captureEvent
   >;
+
+  jest.spyOn(CaptureInternalException, 'captureInternalException');
 
   beforeAll(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
@@ -465,7 +468,7 @@ describe('Replay', () => {
     await advanceTimers(2000);
     expect(mockCaptureEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        error_ids: expect.arrayContaining([expect.any(String)]),
+        error_ids: [],
         replay_id: expect.any(String),
         replay_start_timestamp: BASE_TIMESTAMP / 1000,
         segment_id: 0,
@@ -547,8 +550,12 @@ describe('Replay', () => {
 
     // Retries = 3 (total tries = 4 including initial attempt)
     // + last exception is max retries exceeded
-    expect(SentryCore.captureException).toHaveBeenCalledTimes(5);
-    expect(SentryCore.captureException).toHaveBeenLastCalledWith(
+    expect(
+      CaptureInternalException.captureInternalException
+    ).toHaveBeenCalledTimes(5);
+    expect(
+      CaptureInternalException.captureInternalException
+    ).toHaveBeenLastCalledWith(
       new Error('Unable to send Replay - max retries exceeded')
     );
 

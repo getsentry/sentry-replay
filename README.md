@@ -4,7 +4,7 @@ Note: Session Replay is currently in alpha.
 
 ## Pre-requisites
 
-For the sentry-replay integration to work, you must have the [Sentry browser SDK package](https://www.npmjs.com/package/@sentry/browser) (or an equivalent framework SDK e.g. [@sentry/react](https://www.npmjs.com/package/@sentry/react)) installed.
+For the sentry-replay integration to work, you must have the [Sentry browser SDK package](https://www.npmjs.com/package/@sentry/browser) (minimum version `7.x`), or an equivalent framework SDK (e.g. [@sentry/react](https://www.npmjs.com/package/@sentry/react)) installed.
 
 ## Installation
 
@@ -31,7 +31,13 @@ import { Replay } from '@sentry/replay';
 
 Sentry.init({
   dsn: '__DSN__',
-  integrations: [new Replay()],
+  integrations: [
+    new Replay({
+      // This sets the sample rate to be 10%. You may want this to be 100% while
+      // in development and sample at a lower rate in production
+      replaysSamplingRate: 0.1,
+    })
+  ],
   // ...
 });
 ```
