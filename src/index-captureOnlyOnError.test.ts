@@ -25,9 +25,9 @@ describe('Replay (capture only on error)', () => {
   let mockSendReplayRequest: MockSendReplayRequest;
   const { record: mockRecord } = mockRrweb();
 
-  beforeAll(() => {
+  beforeAll(async () => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    ({ replay } = mockSdk({
+    ({ replay } = await mockSdk({
       replayOptions: { captureOnlyOnError: true, stickySession: false },
     }));
     jest.spyOn(replay, 'sendReplayRequest');

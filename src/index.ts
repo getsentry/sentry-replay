@@ -58,6 +58,8 @@ const UNABLE_TO_SEND_REPLAY = 'Unable to send Replay';
 const MEDIA_SELECTORS =
   'img,image,svg,path,rect,area,video,object,picture,embed,map,audio';
 
+let _initialized = false;
+
 export class Replay implements Integration {
   /**
    * @inheritDoc
@@ -194,6 +196,15 @@ export class Replay implements Integration {
         maxWait: this.options.flushMaxDelay,
       }
     );
+
+    if (_initialized) {
+      const error = new Error(
+        'Multiple Sentry Session Replay instances are not supported'
+      );
+      captureInternalException(error);
+      throw error;
+    }
+    _initialized = true;
   }
 
   /**
@@ -220,7 +231,8 @@ export class Replay implements Integration {
 
     // If there is no session, then something bad has happened - can't continue
     if (!this.session) {
-      throw new Error('Invalid session');
+      captureInternalException(new Error('Invalid session'));
+      return;
     }
 
     if (!this.session.sampled) {
