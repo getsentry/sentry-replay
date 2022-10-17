@@ -1,8 +1,8 @@
-import { SentryReplay } from './';
+import { Replay } from './';
 
 it('throws on creating multiple instances', function () {
   expect(() => {
-    new SentryReplay();
-    new SentryReplay();
+    new Replay();
+    new Replay();
   }).toThrow();
 });
