@@ -202,9 +202,11 @@ export class Replay implements Integration {
     );
 
     if (_initialized) {
-      throw new Error(
+      const error = new Error(
         'Multiple Sentry Session Replay instances are not supported'
       );
+      captureInternalException(error);
+      throw error;
     }
     _initialized = true;
   }
@@ -233,7 +235,8 @@ export class Replay implements Integration {
 
     // If there is no session, then something bad has happened - can't continue
     if (!this.session) {
-      throw new Error('Invalid session');
+      captureInternalException(new Error('Invalid session'));
+      return;
     }
 
     if (!this.session.sampled) {
