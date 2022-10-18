@@ -18,6 +18,7 @@ async function advanceTimers(time: number) {
   await new Promise(process.nextTick);
 }
 
+type MockFetch = jest.MockedFunction<typeof fetch>;
 describe('Replay', () => {
   let replay: Replay;
   const prevLocation = window.location;
@@ -28,17 +29,7 @@ describe('Replay', () => {
   let mockSendReplayRequest: MockSendReplayRequest;
   let domHandler: (args: any) => any;
   const { record: mockRecord } = mockRrweb();
-
-  // jest.spyOn(global, 'fetch');
-  // console.log(global.fetch);
-  // global.fetch.mockImplementation(
-  //   jest.fn(() => {
-  //     console.log('mocked fetc');
-  //   })
-  // );
-  // // global.fetch = jest.fn(() => {
-  //   console.log('mocked fethc');
-  // });
+  let mockFetch: MockFetch;
 
   jest.spyOn(CaptureInternalException, 'captureInternalException');
 
@@ -53,23 +44,17 @@ describe('Replay', () => {
       });
 
     ({ replay } = await mockSdk());
-    jest.spyOn(replay, 'sendReplayRequest');
-    mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
     jest.runAllTimers();
     jest.spyOn(replay, 'flush');
     jest.spyOn(replay, 'runFlush');
-    // const mockFlush = replay.flush as MockFlush;
+    mockFetch = global.fetch as MockFetch;
   });
 
   beforeEach(() => {
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    mockSendReplayRequest.mockClear();
     replay.eventBuffer?.destroy();
-    // mockSendReplayRequest.mockImplementation(
-    //   jest.fn(async () => {
-    //     return;
-    //   })
-    // );
+    jest.spyOn(replay, 'sendReplayRequest');
+    mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
   });
 
   afterEach(async () => {
@@ -85,8 +70,8 @@ describe('Replay', () => {
       value: prevLocation,
       writable: true,
     });
-    mockSendReplayRequest.mockReset();
     jest.clearAllMocks();
+    mockSendReplayRequest.mockRestore();
   });
 
   afterAll(() => {
@@ -221,9 +206,9 @@ describe('Replay', () => {
     await new Promise(process.nextTick);
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([TEST_EVENT, hiddenBreadcrumb])
-    );
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([TEST_EVENT, hiddenBreadcrumb]),
+    });
     // Session's last activity should not be updated
     expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP);
     // events array should be empty
@@ -250,7 +235,7 @@ describe('Replay', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
 
     // Session's last activity is not updated because we do not consider
     // visibilitystate as user being active
@@ -268,7 +253,7 @@ describe('Replay', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
 
     // No user activity to trigger an update
     expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP);
@@ -291,12 +276,12 @@ describe('Replay', () => {
     mockRecord._emitter(TEST_EVENT);
     await new Promise(process.nextTick);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([...Array(5)].map(() => TEST_EVENT))
-    );
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([...Array(5)].map(() => TEST_EVENT)),
+    });
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
-    mockSendReplayRequest.mockClear();
+    mockFetch.mockClear();
     await advanceTimers(5000);
 
     expect(replay).not.toHaveSentReplay();
@@ -307,10 +292,10 @@ describe('Replay', () => {
     expect(replay.eventBuffer?.length).toBe(0);
 
     // Let's make sure it continues to work
-    mockSendReplayRequest.mockClear();
+    mockFetch.mockClear();
     mockRecord._emitter(TEST_EVENT);
     await advanceTimers(5000);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
   });
 
   it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
@@ -367,8 +352,8 @@ describe('Replay', () => {
     const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
     const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([
         { data: { isCheckout: true }, timestamp: newTimestamp, type: 2 },
         {
           type: 5,
@@ -384,8 +369,8 @@ describe('Replay', () => {
             },
           },
         },
-      ])
-    );
+      ]),
+    });
 
     // `initialState` should be reset when a new session is created
     // @ts-expect-error private member
@@ -403,8 +388,8 @@ describe('Replay', () => {
     // Pretend 5 seconds have passed
     await advanceTimers(5000);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([
         {
           type: 5,
           timestamp: BASE_TIMESTAMP,
@@ -419,8 +404,8 @@ describe('Replay', () => {
             },
           },
         },
-      ])
-    );
+      ]),
+    });
 
     expect(replay.session?.segmentId).toBe(1);
   });
@@ -442,7 +427,7 @@ describe('Replay', () => {
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    expect(replay).not.toHaveSentReplay();
 
     mockSendReplayRequest.mockReset();
     mockSendReplayRequest.mockImplementationOnce(() => {
@@ -450,49 +435,39 @@ describe('Replay', () => {
     });
     await advanceTimers(5000);
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
+    expect(replay).not.toHaveSentReplay();
 
     // next tick should retry and succeed
     mockConsole.mockRestore();
     mockSendReplayRequest.mockReset();
-    mockSendReplayRequest.mockImplementationOnce(() => {
-      return Promise.resolve();
-    });
 
     await advanceTimers(8000);
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
+    mockSendReplayRequest.mockRestore();
     await advanceTimers(2000);
-    // TODO
-    // expect(mockCaptureEvent).toHaveBeenCalledWith(
-    //   expect.objectContaining({
-    //     error_ids: [],
-    //     replay_id: expect.any(String),
-    //     replay_start_timestamp: BASE_TIMESTAMP / 1000,
-    //     segment_id: 0,
-    //     // 20seconds = Add up all of the previous `advanceTimers()`
-    //     timestamp: (BASE_TIMESTAMP + 20000) / 1000 + 0.06,
-    //     trace_ids: [],
-    //     type: 'replay_event',
-    //     urls: ['http://localhost/'],
-    //   }),
-    //   {
-    //     event_id: expect.any(String),
-    //   }
-    // );
-    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        error_ids: [],
+        replay_id: expect.any(String),
+        replay_start_timestamp: BASE_TIMESTAMP / 1000,
+        // 20seconds = Add up all of the previous `advanceTimers()`
+        timestamp: (BASE_TIMESTAMP + 20000) / 1000,
+        trace_ids: [],
+        urls: ['http://localhost/'],
+      }),
+      recordingPayloadHeader: { segment_id: 0 },
+      events: JSON.stringify([TEST_EVENT]),
+    });
+    mockFetch.mockClear();
 
     // No activity has occurred, session's last activity should remain the same
     expect(replay.session?.lastActivity).toBeGreaterThanOrEqual(BASE_TIMESTAMP);
     expect(replay.session?.segmentId).toBe(1);
 
     // next tick should do nothing
-
-    mockSendReplayRequest.mockReset();
-    mockSendReplayRequest.mockImplementationOnce(() => {
-      return Promise.resolve();
-    });
     await advanceTimers(5000);
-    expect(replay.sendReplayRequest).not.toHaveBeenCalled();
+    expect(replay).not.toHaveSentReplay();
   });
 
   it('fails to upload data and hits retry max and stops', async () => {
@@ -554,7 +529,7 @@ describe('Replay', () => {
     expect(replay.session?.segmentId).toBe(1);
   });
 
-  it('sends a replay event after each recording event', async () => {
+  it('increases segment id after each event', async () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -571,23 +546,19 @@ describe('Replay', () => {
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
-    expect(replay.sendReplayRequest).toHaveBeenCalled();
+    expect(replay).toHaveSentReplay({
+      recordingPayloadHeader: { segment_id: 0 },
+    });
     expect(replay.session?.segmentId).toBe(1);
-
-    (
-      replay.sendReplayRequest as jest.MockedFunction<
-        typeof replay.sendReplayRequest
-      >
-    ).mockClear();
 
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
     jest.runAllTimers();
     await new Promise(process.nextTick);
-    expect(replay.sendReplayRequest).toHaveBeenCalled();
-    // TODO
-    // expect(mockCaptureReplayEvent).toHaveBeenCalled();
     expect(replay.session?.segmentId).toBe(2);
+    expect(replay).toHaveSentReplay({
+      recordingPayloadHeader: { segment_id: 1 },
+    });
   });
 
   it('does not create replay event when there are no events to send', async () => {
@@ -600,7 +571,7 @@ describe('Replay', () => {
 
     document.dispatchEvent(new Event('visibilitychange'));
     await new Promise(process.nextTick);
-    expect(replay.sendReplayRequest).not.toHaveBeenCalled();
+    expect(replay).not.toHaveSentReplay();
 
     // Pretend 5 seconds have passed
     const ELAPSED = 5000;
@@ -615,17 +586,16 @@ describe('Replay', () => {
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
-    // TODO
-    // expect(mockCaptureReplayEvent).toHaveBeenCalledWith(
-    //   expect.objectContaining({
-    //     initialState: {
-    //       timestamp: BASE_TIMESTAMP,
-    //       url: 'http://localhost/', // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
-    //     },
-    //   })
-    // );
+
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        replay_start_timestamp: BASE_TIMESTAMP / 1000,
+        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+      }),
+    });
   });
 
+  // TODO: ... this doesn't really test anything anymore since replay event and recording are sent in the same envelope
   it('does not create replay event if recording upload completely fails', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Suppress console.errors
@@ -642,8 +612,6 @@ describe('Replay', () => {
     await advanceTimers(5000);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
 
     // Reset console.error mock to minimize the amount of time we are hiding
     // console messages in case an error happens after
@@ -710,18 +678,15 @@ describe('Replay', () => {
 
     window.dispatchEvent(new Event('blur'));
     await new Promise(process.nextTick);
-    //TODO
-    // expect(mockCaptureReplayEvent).toHaveBeenCalledWith(
-    //   expect.objectContaining({
-    //     initialState: {
-    //       timestamp: BASE_TIMESTAMP - 10000,
-    //       url: 'http://localhost/', // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
-    //     },
-    //   })
-    // );
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        replay_start_timestamp: (BASE_TIMESTAMP - 10000) / 1000,
+        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+      }),
+    });
   });
 
-  it.only('does not have stale `replay_start_timestamp`', async function () {
+  it('does not have stale `replay_start_timestamp`', async function () {
     // @ts-expect-error read-only
     window.performance.timeOrigin = BASE_TIMESTAMP;
     // add a fake/old performance event
@@ -753,14 +718,11 @@ describe('Replay', () => {
     await new Promise(process.nextTick);
 
     expect(replay.session?.id).not.toBe(oldSessionId);
-    // TODO
-    // expect(mockCaptureEvent).toHaveBeenNthCalledWith(
-    //   1,
-    //   expect.objectContaining({
-    //     replay_start_timestamp: (BASE_TIMESTAMP + ELAPSED) / 1000,
-    //   }),
-    //   { event_id: expect.any(String) }
-    // );
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        replay_start_timestamp: (BASE_TIMESTAMP + ELAPSED) / 1000,
+      }),
+    });
 
     // This gets reset after sending replay
     // @ts-expect-error private member
