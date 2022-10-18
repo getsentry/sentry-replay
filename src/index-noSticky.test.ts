@@ -18,7 +18,7 @@ import {
 } from './session/constants';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+jest.useFakeTimers();
 
 async function advanceTimers(time: number) {
   jest.advanceTimersByTime(time);
@@ -199,7 +199,7 @@ describe('Replay (no sticky)', () => {
     });
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
-    (global.fetch as jest.MockedFunction<typeof fetch>).mockClear();
+    (global.fetch as jest.jest.MockedFunction<typeof fetch>).mockClear();
     await advanceTimers(5000);
     expect(replay).not.toHaveSentReplay();
 
@@ -209,7 +209,7 @@ describe('Replay (no sticky)', () => {
     expect(replay.eventBuffer?.length).toBe(0);
 
     // Let's make sure it continues to work
-    (global.fetch as jest.MockedFunction<typeof fetch>).mockClear();
+    (global.fetch as jest.jest.MockedFunction<typeof fetch>).mockClear();
     mockRecord._emitter(TEST_EVENT);
     await advanceTimers(5000);
     expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
