@@ -20,7 +20,7 @@ import {
 import * as CaptureInternalException from './util/captureInternalException';
 import { Replay } from './';
 
-jest.useFakeTimers();
+jest.useFakeTimers({ advanceTimers: true });
 
 async function advanceTimers(time: number) {
   jest.advanceTimersByTime(time);
@@ -625,10 +625,6 @@ describe('Replay', () => {
     // Reset console.error mock to minimize the amount of time we are hiding
     // console messages in case an error happens after
     mockConsole.mockClear();
-<<<<<<< HEAD
-=======
-    jest.advanceTimersToNextTimer();
->>>>>>> 4e295c6 (feat: use `@jest/globals`)
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
     mockSendReplayRequest.mockImplementationOnce(() => {
