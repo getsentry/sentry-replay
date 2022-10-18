@@ -1,5 +1,8 @@
+import { browserPerformanceTimeOrigin } from '@sentry/utils';
 import { record } from 'rrweb';
-import { getCurrentHub } from '@sentry/browser';
+
+import { isIngestHost } from './util/isIngestHost';
+import { AllPerformanceEntry } from './types';
 
 export interface ReplayPerformanceEntry {
   /**
@@ -37,7 +40,7 @@ interface MemoryInfo {
 // Map entryType -> function to normalize data for event
 const ENTRY_TYPES: Record<
   string,
-  (entry: PerformanceEntry) => ReplayPerformanceEntry
+  (entry: AllPerformanceEntry) => null | ReplayPerformanceEntry
 > = {
   resource: createResourceEntry,
   paint: createPaintEntry,
@@ -45,11 +48,13 @@ const ENTRY_TYPES: Record<
   ['largest-contentful-paint']: createLargestContentfulPaint,
 };
 
-export function createPerformanceEntries(entries: PerformanceEntry[]) {
-  return entries.map(createPerformanceEntry).filter(Boolean);
+export function createPerformanceEntries(entries: AllPerformanceEntry[]) {
+  return entries
+    .map(createPerformanceEntry)
+    .filter(Boolean) as ReplayPerformanceEntry[];
 }
 
-function createPerformanceEntry(entry: PerformanceEntry) {
+function createPerformanceEntry(entry: AllPerformanceEntry) {
   if (ENTRY_TYPES[entry.entryType] === undefined) {
     return null;
   }
@@ -58,7 +63,12 @@ function createPerformanceEntry(entry: PerformanceEntry) {
 }
 
 function getAbsoluteTime(time: number) {
-  return (window.performance.timeOrigin + time) / 1000;
+  // browserPerformanceTimeOrigin can be undefined if `performance` or
+  // `performance.now` doesn't exist, but this is already checked by this integration
+  return (
+    ((browserPerformanceTimeOrigin || window.performance.timeOrigin) + time) /
+    1000
+  );
 }
 
 function createPaintEntry(entry: PerformancePaintTiming) {
@@ -75,8 +85,20 @@ function createPaintEntry(entry: PerformancePaintTiming) {
 
 function createNavigationEntry(entry: PerformanceNavigationTiming) {
   // TODO: There looks to be some more interesting bits in here (domComplete, domContentLoaded)
+  const {
+    entryType,
+    name,
+    duration,
+    domComplete,
+    startTime,
+    transferSize,
+    type,
+  } = entry;
 
-  const { entryType, name, domComplete, startTime, transferSize, type } = entry;
+  // Ignore entries with no duration, they do not seem to be useful and cause dupes
+  if (duration === 0) {
+    return null;
+  }
 
   return {
     type: `${entryType}.${type}`,
@@ -85,6 +107,7 @@ function createNavigationEntry(entry: PerformanceNavigationTiming) {
     name,
     data: {
       size: transferSize,
+      duration,
     },
   };
 }
@@ -95,12 +118,17 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
     name,
     responseEnd,
     startTime,
+    encodedBodySize,
     transferSize,
   } = entry;
 
   // Do not capture fetches to Sentry ingestion endpoint
-  const { host, protocol } = getCurrentHub()?.getClient()?.getDsn() || {};
-  if (name.startsWith(`${protocol}://${host}`)) {
+  if (isIngestHost(name)) {
+    return null;
+  }
+
+  // Core SDK handles these
+  if (['fetch', 'xmlhttprequest'].includes(initiatorType)) {
     return null;
   }
 
@@ -111,6 +139,7 @@ function createResourceEntry(entry: PerformanceResourceTiming) {
     name,
     data: {
       size: transferSize,
+      encodedBodySize,
     },
   };
 }
@@ -128,6 +157,7 @@ function createLargestContentfulPaint(
     start,
     end: start + duration,
     data: {
+      duration,
       size,
       // Not sure why this errors, Node should be correct (Argument of type 'Node' is not assignable to parameter of type 'INode')
       nodeId: record.mirror.getId(entry.element as any),
@@ -137,8 +167,8 @@ function createLargestContentfulPaint(
 
 export function createMemoryEntry(memoryEntry: MemoryInfo) {
   const { jsHeapSizeLimit, totalJSHeapSize, usedJSHeapSize } = memoryEntry;
-  // we can't use getAbsoluteTime because it adds the event time to
-  // window.performance.timeOrigin, so we get right now instead.
+  // we don't want to use `getAbsoluteTime` because it adds the event time to the
+  // time origin, so we get the current timestamp instead
   const time = new Date().getTime() / 1000;
   return {
     type: 'memory',

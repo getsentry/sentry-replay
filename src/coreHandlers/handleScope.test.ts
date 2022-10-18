@@ -1,7 +1,6 @@
-import { vi, it, expect, MockedFunction } from 'vitest';
+import type { Breadcrumb, Scope } from '@sentry/types';
+import { expect, it, MockedFunction, vi } from 'vitest';
 
-import type { Scope } from '@sentry/hub';
-import type { Breadcrumb } from '@sentry/types';
 import * as HandleScope from './handleScope';
 
 vi.spyOn(HandleScope, 'handleScope');

@@ -1,6 +1,6 @@
-import { vi, MockedFunction, SpyInstance } from 'vitest';
-import { BASE_TIMESTAMP } from '@test';
-import { RRWebEvent } from '@/types';
+import { MockedFunction, SpyInstance, vi } from 'vitest';
+
+import { RecordingEvent } from '../../src/types';
 
 type RecordAdditionalProperties = {
   takeFullSnapshot: jest.Mock;
@@ -11,7 +11,7 @@ type RecordAdditionalProperties = {
   mirror: unknown;
 
   // Custom property to fire events in tests, does not exist in rrweb.record
-  _emitter: (event: RRWebEvent, ...args: any[]) => void;
+  _emitter: (event: RecordingEvent, ...args: any[]) => void;
 };
 
 export type RecordMock = MockedFunction<typeof rrweb.record> &
@@ -32,7 +32,7 @@ vi.mock('rrweb', async () => {
     mockRecordFn._emitter(
       {
         data: { isCheckout },
-        timestamp: BASE_TIMESTAMP,
+        timestamp: new Date().getTime(),
         type: isCheckout ? 2 : 3,
       },
       isCheckout

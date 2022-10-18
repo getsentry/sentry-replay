@@ -5,11 +5,10 @@ vi.unmock('@sentry/browser');
 import { BrowserOptions, init } from '@sentry/browser';
 import { Transport } from '@sentry/types';
 
-import { SentryReplayConfiguration } from '@/types';
-import { SentryReplay } from '@';
+import { ReplayConfiguration } from '../../src/types';
 
 interface MockSdkParams {
-  replayOptions?: SentryReplayConfiguration;
+  replayOptions?: ReplayConfiguration;
   sentryOptions?: BrowserOptions;
 }
 
@@ -20,7 +19,7 @@ class MockTransport implements Transport {
   async flush() {
     return true;
   }
-  async sendEvent(e: Event) {
+  async sendEvent(_e: Event) {
     return {
       status: 'skipped',
       event: 'ok',
@@ -38,10 +37,10 @@ class MockTransport implements Transport {
   }
 }
 
-export function mockSdk({
+export async function mockSdk({
   replayOptions = {
     stickySession: true,
-    rrwebConfig: { ignoreClass: 'sr-test' },
+    ignoreClass: 'sentry-test-ignore',
   },
   sentryOptions = {
     dsn: 'https://dsn@ingest.f00.f00/1',
@@ -50,7 +49,8 @@ export function mockSdk({
     transport: () => new MockTransport(),
   },
 }: MockSdkParams = {}) {
-  const replay = new SentryReplay(replayOptions);
+  const { Replay } = await import('../../src');
+  const replay = new Replay(replayOptions);
 
   init({ ...sentryOptions, integrations: [replay] });
   vi.spyOn(replay, 'sendReplayRequest');

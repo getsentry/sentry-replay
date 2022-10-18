@@ -1,15 +1,19 @@
-import { logger } from '@/util/logger';
+import { logger } from '../util/logger';
+
 import { saveSession } from './saveSession';
-import type { ReplaySession } from './types';
-import { ROOT_REPLAY_NAME } from './constants';
-import { getCurrentHub } from '@sentry/browser';
-import { uuid4 } from '@sentry/utils';
+import { Session } from './Session';
 
 interface CreateSessionParams {
   /**
    * Should save to sessionStorage?
    */
   stickySession: boolean;
+
+  /**
+   * The sampling rate of the Session. See integration configuration comments
+   * for `replaysSamplingRate`.
+   */
+  samplingRate?: number;
 }
 
 /**
@@ -19,23 +23,9 @@ interface CreateSessionParams {
  */
 export function createSession({
   stickySession = false,
-}: CreateSessionParams): ReplaySession {
-  const currentDate = new Date().getTime();
-  const hub = getCurrentHub();
-
-  const session = {
-    id: uuid4(),
-    started: currentDate,
-    lastActivity: currentDate,
-    sequenceId: 0,
-  };
-  hub.captureEvent(
-    {
-      message: ROOT_REPLAY_NAME,
-      tags: { sequenceId: session.sequenceId },
-    },
-    { event_id: session.id }
-  );
+  samplingRate = 1.0,
+}: CreateSessionParams): Session {
+  const session = new Session(undefined, { stickySession, samplingRate });
 
   logger.log(`Creating new session: ${session.id}`);
 

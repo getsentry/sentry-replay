@@ -1,6 +1,6 @@
-import { it, expect } from 'vitest';
-
 import pako from 'pako';
+import { expect, it } from 'vitest';
+
 import { Compressor } from './Compressor';
 
 it('compresses multiple events', function () {

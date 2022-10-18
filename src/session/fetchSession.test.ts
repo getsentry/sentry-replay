@@ -1,4 +1,4 @@
-import { beforeAll, afterEach, it, expect } from 'vitest';
+import { afterEach, beforeAll, expect, it } from 'vitest';
 
 import { REPLAY_SESSION_KEY } from './constants';
 import { fetchSession } from './fetchSession';
@@ -17,9 +17,11 @@ it('fetches a valid session', function () {
     '{"id":"fd09adfc4117477abc8de643e5a5798a","started":1648827162630,"lastActivity":1648827162658}'
   );
 
-  expect(fetchSession()).toEqual({
+  expect(fetchSession()?.toJSON()).toEqual({
     id: 'fd09adfc4117477abc8de643e5a5798a',
     lastActivity: 1648827162658,
+    segmentId: 0,
+    sampled: true,
     started: 1648827162630,
   });
 });

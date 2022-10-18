@@ -1,25 +1,26 @@
-// mock functions need to be imported first
-import { BASE_TIMESTAMP, mockSdk, mockRrweb } from '@test';
-
+import * as SentryCore from '@sentry/core';
+import * as SentryUtils from '@sentry/utils';
+import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
+import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
 import {
+  afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
-  afterEach,
-  afterAll,
   describe,
-  it,
   expect,
-  vi,
+  it,
   MockedFunction,
+  vi,
 } from 'vitest';
 
-import * as SentryUtils from '@sentry/utils';
-
-import { SentryReplay } from '@';
 import {
+  REPLAY_SESSION_KEY,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
-} from '@/session/constants';
+} from './session/constants';
+import * as CaptureInternalException from './util/captureInternalException';
+import { Replay } from './';
 
 vi.useFakeTimers();
 
@@ -27,17 +28,21 @@ async function advanceTimers(time: number) {
   vi.advanceTimersByTime(time);
 }
 
-describe('SentryReplay', () => {
-  let replay: SentryReplay;
+type MockFetch = MockedFunction<typeof fetch>;
+describe('Replay', () => {
+  let replay: Replay;
+  const prevLocation = window.location;
+
   type MockSendReplayRequest = MockedFunction<typeof replay.sendReplayRequest>;
   let mockSendReplayRequest: MockSendReplayRequest;
   let domHandler: (args: any) => any;
   const { record: mockRecord } = mockRrweb();
+  let mockFetch: MockFetch;
 
-  beforeAll(() => {
+  vi.spyOn(CaptureInternalException, 'captureInternalException');
+
+  beforeAll(async () => {
     vi.setSystemTime(new Date(BASE_TIMESTAMP));
-    ({ replay } = mockSdk());
-    vi.spyOn(replay, 'sendReplayRequest');
     vi.mock('@sentry/utils', async () => {
       const actual = (await vi.importActual(
         '@sentry/utils'
@@ -55,41 +60,53 @@ describe('SentryReplay', () => {
     ).mockImplementation((_type, handler: (args: any) => any) => {
       domHandler = handler;
     });
-    mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
-    mockSendReplayRequest.mockImplementation(
-      vi.fn(async () => {
-        return;
-      })
-    );
+
+    ({ replay } = await mockSdk());
     vi.runAllTimers();
+    vi.spyOn(replay, 'flush');
+    vi.spyOn(replay, 'runFlush');
+    mockFetch = global.fetch as MockFetch;
   });
 
   beforeEach(() => {
     vi.setSystemTime(new Date(BASE_TIMESTAMP));
-    mockSendReplayRequest.mockClear();
+    replay.eventBuffer?.destroy();
+    vi.spyOn(replay, 'sendReplayRequest');
+    mockSendReplayRequest = replay.sendReplayRequest as MockSendReplayRequest;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    vi.runAllTimers();
+    await new Promise(process.nextTick);
     vi.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
-    mockRecord.takeFullSnapshot.mockClear();
+    // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
+    delete window.location;
+    Object.defineProperty(window, 'location', {
+      value: prevLocation,
+      writable: true,
+    });
+    vi.clearAllMocks();
+    mockSendReplayRequest.mockRestore();
   });
 
   afterAll(() => {
-    replay && replay.destroy();
+    replay && replay.stop();
     vi.unmock('@sentry/utils');
   });
 
   it('calls rrweb.record with custom options', async () => {
     expect(mockRecord.mock.calls[0][0]).toMatchInlineSnapshot(`
       {
-        "blockClass": "sr-block",
+        "blockClass": "sentry-block",
+        "blockSelector": "[data-sentry-block],img,image,svg,path,rect,area,video,object,picture,embed,map,audio",
         "emit": [Function],
-        "ignoreClass": "sr-test",
+        "ignoreClass": "sentry-test-ignore",
         "maskAllInputs": true,
-        "maskTextClass": "sr-mask",
+        "maskTextClass": "sentry-mask",
+        "maskTextSelector": "*",
       }
     `);
   });
@@ -99,8 +116,14 @@ describe('SentryReplay', () => {
       lastActivity: BASE_TIMESTAMP,
       started: BASE_TIMESTAMP,
     });
-    expect(replay.session.id).toBeDefined();
-    expect(replay.session.sequenceId).toBeDefined();
+    expect(replay.session?.id).toBeDefined();
+    expect(replay.session?.segmentId).toBeDefined();
+  });
+
+  it('clears session', () => {
+    replay.clearSession();
+    expect(window.sessionStorage.getItem(REPLAY_SESSION_KEY)).toBe(null);
+    expect(replay.session).toBe(undefined);
   });
 
   it('creates a new session and triggers a full dom snapshot when document becomes visible after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
@@ -123,7 +146,27 @@ describe('SentryReplay', () => {
     expect(replay).not.toHaveSameSession(initialSession);
   });
 
-  it('does not create a new session if user hides the tab and comes back within 60 seconds', () => {
+  it('creates a new session and triggers a full dom snapshot when document becomes focused after [VISIBILITY_CHANGE_TIMEOUT]ms', () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'visible';
+      },
+    });
+
+    const initialSession = replay.session;
+
+    vi.advanceTimersByTime(VISIBILITY_CHANGE_TIMEOUT + 1);
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(mockRecord.takeFullSnapshot).toHaveBeenLastCalledWith(true);
+
+    // Should have created a new session
+    expect(replay).not.toHaveSameSession(initialSession);
+  });
+
+  it('does not create a new session if user hides the tab and comes back within [VISIBILITY_CHANGE_TIMEOUT] seconds', () => {
     const initialSession = replay.session;
 
     Object.defineProperty(document, 'visibilityState', {
@@ -151,8 +194,47 @@ describe('SentryReplay', () => {
     expect(replay).toHaveSameSession(initialSession);
   });
 
+  it('uploads a replay event when window is blurred', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'hidden';
+      },
+    });
+
+    // Pretend 5 seconds have passed
+    const ELAPSED = 5000;
+    vi.advanceTimersByTime(ELAPSED);
+
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    const hiddenBreadcrumb = {
+      type: 5,
+      timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
+      data: {
+        tag: 'breadcrumb',
+        payload: {
+          timestamp: +new Date(BASE_TIMESTAMP + ELAPSED) / 1000,
+          type: 'default',
+          category: 'ui.blur',
+        },
+      },
+    };
+
+    replay.addEvent(TEST_EVENT);
+    window.dispatchEvent(new Event('blur'));
+    await new Promise(process.nextTick);
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalled();
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([TEST_EVENT, hiddenBreadcrumb]),
+    });
+    // Session's last activity should not be updated
+    expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP);
+    // events array should be empty
+    expect(replay.eventBuffer?.length).toBe(0);
+  });
+
   it('uploads a replay event when document becomes hidden', async () => {
-    mockRecord.takeFullSnapshot.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: function () {
@@ -164,22 +246,21 @@ describe('SentryReplay', () => {
     vi.advanceTimersByTime(ELAPSED);
 
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
-    replay.eventBuffer.addEvent(TEST_EVENT);
+
+    replay.addEvent(TEST_EVENT);
     document.dispatchEvent(new Event('visibilitychange'));
+    vi.runAllTimers();
     await new Promise(process.nextTick);
+
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
     expect(replay.sendReplayRequest).toHaveBeenCalled();
-    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
-      endpoint: expect.stringMatching(regex),
-      events: JSON.stringify([TEST_EVENT]),
-    });
-    // Session's last activity should be updated
-    expect(replay.session.lastActivity).toBeGreaterThan(BASE_TIMESTAMP);
-    // // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
+
+    // Session's last activity is not updated because we do not consider
+    // visibilitystate as user being active
+    expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP);
+    // events array should be empty
+    expect(replay.eventBuffer?.length).toBe(0);
   });
 
   it('uploads a replay event if 5 seconds have elapsed since the last replay event occurred', async () => {
@@ -190,23 +271,15 @@ describe('SentryReplay', () => {
     await advanceTimers(ELAPSED);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
-
-    const regex = new RegExp(
-      'https://ingest.f00.f00/api/1/events/[^/]+/attachments/\\?sentry_key=dsn&sentry_version=7&sentry_client=replay'
-    );
-
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
-    expect(replay.sendReplayRequest).toHaveBeenCalledWith({
-      endpoint: expect.stringMatching(regex),
-      events: JSON.stringify([TEST_EVENT]),
-    });
+    expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
 
-    // No activity has occurred, session's last activity should remain the same
-    expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
-    expect(replay.session.sequenceId).toBe(1);
+    // No user activity to trigger an update
+    expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP);
+    expect(replay.session?.segmentId).toBe(1);
 
     // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay.eventBuffer?.length).toBe(0);
   });
 
   it('uploads a replay event if 15 seconds have elapsed since the last replay upload', async () => {
@@ -222,38 +295,46 @@ describe('SentryReplay', () => {
     mockRecord._emitter(TEST_EVENT);
     await new Promise(process.nextTick);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([...Array(5)].map(() => TEST_EVENT))
-    );
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([...Array(5)].map(() => TEST_EVENT)),
+    });
 
     // There should also not be another attempt at an upload 5 seconds after the last replay event
-    mockSendReplayRequest.mockClear();
+    mockFetch.mockClear();
     await advanceTimers(5000);
 
     expect(replay).not.toHaveSentReplay();
 
-    expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP + 16000);
-    expect(replay.session.sequenceId).toBe(1);
+    expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP);
+    expect(replay.session?.segmentId).toBe(1);
     // events array should be empty
-    expect(replay.eventBuffer.length).toBe(0);
+    expect(replay.eventBuffer?.length).toBe(0);
 
     // Let's make sure it continues to work
-    mockSendReplayRequest.mockClear();
+    mockFetch.mockClear();
     mockRecord._emitter(TEST_EVENT);
     await advanceTimers(5000);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
-
-    // Clean-up
-    mockSendReplayRequest.mockReset();
+    expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
   });
 
   it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
     const initialSession = replay.session;
 
-    expect(initialSession.id).toBeDefined();
+    expect(initialSession?.id).toBeDefined();
+    // @ts-expect-error private member
+    expect(replay.initialState).toEqual({
+      url: 'http://localhost/',
+      timestamp: BASE_TIMESTAMP,
+    });
+
+    const url = 'http://dummy/';
+    Object.defineProperty(window, 'location', {
+      value: new URL(url),
+    });
 
     // Idle for 15 minutes
-    vi.advanceTimersByTime(15 * 60000);
+    const FIFTEEN_MINUTES = 15 * 60000;
+    vi.advanceTimersByTime(FIFTEEN_MINUTES);
 
     // TBD: We are currently deciding that this event will get dropped, but
     // this could/should change in the future.
@@ -275,16 +356,47 @@ describe('SentryReplay', () => {
     // snapshot.
     expect(mockRecord.takeFullSnapshot).toHaveBeenCalledWith(true);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([
-        { data: { isCheckout: true }, timestamp: BASE_TIMESTAMP, type: 2 },
-      ])
-    );
+    expect(replay).not.toHaveSentReplay();
 
     // Should be a new session
     expect(replay).not.toHaveSameSession(initialSession);
 
-    mockSendReplayRequest.mockReset();
+    // Now do a click
+    domHandler({
+      name: 'click',
+    });
+
+    await advanceTimers(5000);
+
+    const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
+    const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([
+        { data: { isCheckout: true }, timestamp: newTimestamp, type: 2 },
+        {
+          type: 5,
+          timestamp: breadcrumbTimestamp,
+          data: {
+            tag: 'breadcrumb',
+            payload: {
+              timestamp: breadcrumbTimestamp / 1000,
+              type: 'default',
+              category: `ui.click`,
+              message: '<unknown>',
+              data: {},
+            },
+          },
+        },
+      ]),
+    });
+
+    // `initialState` should be reset when a new session is created
+    // @ts-expect-error private member
+    expect(replay.initialState).toEqual({
+      url: 'http://dummy/',
+      timestamp: newTimestamp,
+    });
   });
 
   it('uploads a dom breadcrumb 5 seconds after listener receives an event', async () => {
@@ -296,8 +408,8 @@ describe('SentryReplay', () => {
     const ELAPSED = 5000;
     await advanceTimers(ELAPSED);
 
-    expect(replay).toHaveSentReplay(
-      JSON.stringify([
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([
         {
           type: 5,
           timestamp: BASE_TIMESTAMP,
@@ -312,31 +424,212 @@ describe('SentryReplay', () => {
             },
           },
         },
-      ])
-    );
+      ]),
+    });
 
-    expect(replay.session.sequenceId).toBe(1);
-
-    // breadcrumbs array should be empty
-    expect(replay.breadcrumbs).toHaveLength(0);
+    expect(replay.session?.segmentId).toBe(1);
   });
 
-  it('fails to upload data on first call and retries after five seconds, sending successfully', async () => {
-    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+  it('fails to upload data on first two calls and succeeds on the third', async () => {
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     // Suppress console.errors
     vi.spyOn(console, 'error').mockImplementation(vi.fn());
     const mockConsole = console.error as MockedFunction<typeof console.error>;
-    // fail the first request and pass the second one
+    // fail the first and second requests and pass the third one
     mockSendReplayRequest.mockImplementationOnce(() => {
       throw new Error('Something bad happened');
     });
     mockRecord._emitter(TEST_EVENT);
 
-    await new Promise(process.nextTick);
+    await advanceTimers(5000);
 
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    expect(replay).not.toHaveSentReplay();
+
+    mockSendReplayRequest.mockReset();
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    await advanceTimers(5000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
+    expect(replay).not.toHaveSentReplay();
+
+    // next tick should retry and succeed
+    mockConsole.mockRestore();
+    mockSendReplayRequest.mockReset();
+
+    await advanceTimers(8000);
+    expect(replay.sendReplayRequest).not.toHaveBeenCalled();
+    mockSendReplayRequest.mockRestore();
+    await advanceTimers(2000);
+
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        error_ids: [],
+        replay_id: expect.any(String),
+        replay_start_timestamp: BASE_TIMESTAMP / 1000,
+        // 20seconds = Add up all of the previous `advanceTimers()`
+        timestamp: (BASE_TIMESTAMP + 20000) / 1000,
+        trace_ids: [],
+        urls: ['http://localhost/'],
+      }),
+      recordingPayloadHeader: { segment_id: 0 },
+      events: JSON.stringify([TEST_EVENT]),
+    });
+    mockFetch.mockClear();
+
+    // No activity has occurred, session's last activity should remain the same
+    expect(replay.session?.lastActivity).toBeGreaterThanOrEqual(BASE_TIMESTAMP);
+    expect(replay.session?.segmentId).toBe(1);
+
+    // next tick should do nothing
+    await advanceTimers(5000);
+    expect(replay).not.toHaveSentReplay();
+  });
+
+  it('fails to upload data and hits retry max and stops', async () => {
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
+    vi.spyOn(replay, 'sendReplay');
+    vi.spyOn(SentryCore, 'captureException');
+    // Suppress console.errors
+    vi.spyOn(console, 'error').mockImplementation(vi.fn());
+    const mockConsole = console.error as vi.MockedFunction<
+      typeof console.error
+    >;
+
+    expect(replay.session?.segmentId).toBe(0);
+
+    // fail the first and second requests and pass the third one
+    mockSendReplayRequest.mockReset();
+    mockSendReplayRequest.mockImplementation(() => {
+      throw new Error('Something bad happened');
+    });
+    mockRecord._emitter(TEST_EVENT);
+
+    await advanceTimers(5000);
+
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
+
+    await advanceTimers(5000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(2);
+
+    await advanceTimers(10000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(3);
+
+    await advanceTimers(30000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(4);
+    expect(replay.sendReplay).toHaveBeenCalledTimes(4);
+
+    mockConsole.mockReset();
+
+    // Make sure it doesn't retry again
+    vi.runAllTimers();
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(4);
+    expect(replay.sendReplay).toHaveBeenCalledTimes(4);
+
+    // Retries = 3 (total tries = 4 including initial attempt)
+    // + last exception is max retries exceeded
+    expect(
+      CaptureInternalException.captureInternalException
+    ).toHaveBeenCalledTimes(5);
+    expect(
+      CaptureInternalException.captureInternalException
+    ).toHaveBeenLastCalledWith(
+      new Error('Unable to send Replay - max retries exceeded')
+    );
+
+    // No activity has occurred, session's last activity should remain the same
+    expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP);
+
+    // segmentId increases despite error
+    expect(replay.session?.segmentId).toBe(1);
+  });
+
+  it('increases segment id after each event', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'hidden';
+      },
+    });
+
+    // Pretend 5 seconds have passed
+    const ELAPSED = 5000;
+    await advanceTimers(ELAPSED);
+
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+
+    replay.addEvent(TEST_EVENT);
+    window.dispatchEvent(new Event('blur'));
+    await new Promise(process.nextTick);
+    expect(replay).toHaveSentReplay({
+      recordingPayloadHeader: { segment_id: 0 },
+    });
+    expect(replay.session?.segmentId).toBe(1);
+
+    replay.addEvent(TEST_EVENT);
+    window.dispatchEvent(new Event('blur'));
+    vi.runAllTimers();
+    await new Promise(process.nextTick);
+    expect(replay.session?.segmentId).toBe(2);
+    expect(replay).toHaveSentReplay({
+      recordingPayloadHeader: { segment_id: 1 },
+    });
+  });
+
+  it('does not create replay event when there are no events to send', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'hidden';
+      },
+    });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
+    expect(replay).not.toHaveSentReplay();
+
+    // Pretend 5 seconds have passed
+    const ELAPSED = 5000;
+    await advanceTimers(ELAPSED);
+
+    const TEST_EVENT = {
+      data: {},
+      timestamp: BASE_TIMESTAMP + ELAPSED,
+      type: 2,
+    };
+
+    replay.addEvent(TEST_EVENT);
+    window.dispatchEvent(new Event('blur'));
+    await new Promise(process.nextTick);
+
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        replay_start_timestamp: BASE_TIMESTAMP / 1000,
+        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+      }),
+    });
+  });
+
+  // TODO: ... this doesn't really test anything anymore since replay event and recording are sent in the same envelope
+  it('does not create replay event if recording upload completely fails', async () => {
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
+    // Suppress console.errors
+    vi.spyOn(console, 'error').mockImplementation(vi.fn());
+    const mockConsole = console.error as vi.MockedFunction<
+      typeof console.error
+    >;
+    // fail the first and second requests and pass the third one
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    mockRecord._emitter(TEST_EVENT);
+
+    await advanceTimers(5000);
+
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
     // Reset console.error mock to minimize the amount of time we are hiding
     // console messages in case an error happens after
@@ -344,25 +637,133 @@ describe('SentryReplay', () => {
     vi.advanceTimersToNextTimer();
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
 
-    // next tick should retry and succeed
-    mockSendReplayRequest.mockReset();
     mockSendReplayRequest.mockImplementationOnce(() => {
-      return Promise.resolve();
+      throw new Error('Something bad happened');
     });
-    advanceTimers(5000);
-    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(1);
-    expect(replay).toHaveSentReplay(JSON.stringify([TEST_EVENT]));
+    await advanceTimers(5000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(2);
+
+    // next tick should retry and fail
+    mockConsole.mockClear();
+
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    await advanceTimers(10000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(3);
+
+    mockSendReplayRequest.mockImplementationOnce(() => {
+      throw new Error('Something bad happened');
+    });
+    await advanceTimers(30000);
+    expect(replay.sendReplayRequest).toHaveBeenCalledTimes(4);
 
     // No activity has occurred, session's last activity should remain the same
-    expect(replay.session.lastActivity).toBe(BASE_TIMESTAMP);
-    expect(replay.session.sequenceId).toBe(1);
+    expect(replay.session?.lastActivity).toBeGreaterThanOrEqual(BASE_TIMESTAMP);
+    expect(replay.session?.segmentId).toBe(1);
 
-    // next tick should do nothing
-    mockSendReplayRequest.mockReset();
-    mockSendReplayRequest.mockImplementationOnce(() => {
-      return Promise.resolve();
+    // TODO: Recording should stop and next event should do nothing
+  });
+
+  it('has correct timestamps when there events earlier than initial timestamp', async function () {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return 'hidden';
+      },
     });
-    advanceTimers(5000);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).not.toHaveBeenCalled();
+
+    // Pretend 5 seconds have passed
+    const ELAPSED = 5000;
+    await advanceTimers(ELAPSED);
+
+    const TEST_EVENT = {
+      data: {},
+      timestamp: BASE_TIMESTAMP + ELAPSED,
+      type: 2,
+    };
+
+    replay.addEvent(TEST_EVENT);
+
+    // Add a fake event that started BEFORE
+    replay.addEvent({
+      data: {},
+      timestamp: (BASE_TIMESTAMP - 10000) / 1000,
+      type: 5,
+    });
+
+    window.dispatchEvent(new Event('blur'));
+    await new Promise(process.nextTick);
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        replay_start_timestamp: (BASE_TIMESTAMP - 10000) / 1000,
+        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+      }),
+    });
+  });
+
+  it('does not have stale `replay_start_timestamp`', async function () {
+    // @ts-expect-error read-only
+    window.performance.timeOrigin = BASE_TIMESTAMP;
+    // add a fake/old performance event
+    replay.performanceEvents.push(PerformanceEntryResource());
+
+    const oldSessionId = replay.session?.id;
+
+    // This should be null because `addEvent` has not been called
+    // @ts-expect-error private member
+    expect(replay.context.earliestEvent).toBe(null);
+
+    // Force new session
+    const ELAPSED = 86400000 * 2; // 2 days
+    await advanceTimers(ELAPSED);
+    // XXX: this blur is needed to trigger `flush` + new session
+    window.dispatchEvent(new Event('blur'));
+
+    const TEST_EVENT = {
+      data: {},
+      timestamp: (BASE_TIMESTAMP + ELAPSED) / 1000,
+      type: 2,
+    };
+
+    // This event will trigger capturing recording
+    replay.addEvent(TEST_EVENT);
+    window.dispatchEvent(new Event('blur'));
+    vi.runAllTimers();
+    await new Promise(process.nextTick);
+    await new Promise(process.nextTick);
+
+    expect(replay.session?.id).not.toBe(oldSessionId);
+    expect(replay).toHaveSentReplay({
+      replayEventPayload: expect.objectContaining({
+        replay_start_timestamp: (BASE_TIMESTAMP + ELAPSED) / 1000,
+      }),
+    });
+
+    // This gets reset after sending replay
+    // @ts-expect-error private member
+    expect(replay.context.earliestEvent).toBe(null);
+  });
+
+  it('has single flush when checkout flush and debounce flush happen near simultaneously', async () => {
+    // click happens first
+    domHandler({
+      name: 'click',
+    });
+
+    // checkout
+    const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
+    mockRecord._emitter(TEST_EVENT);
+
+    await advanceTimers(5000);
+    expect(replay.flush).toHaveBeenCalledTimes(1);
+
+    // Make sure there's nothing queued up after
+    await advanceTimers(5000);
+    expect(replay.flush).toHaveBeenCalledTimes(1);
   });
 });

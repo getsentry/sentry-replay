@@ -1,6 +1,6 @@
-import createBreadcrumb from '@/util/createBreadcrumb';
-import { Scope } from '@sentry/hub';
-import { Breadcrumb } from '@sentry/types';
+import { Breadcrumb, Scope } from '@sentry/types';
+
+import createBreadcrumb from '../util/createBreadcrumb';
 
 let _LAST_BREADCRUMB: null | Breadcrumb = null;
 
@@ -10,7 +10,7 @@ export function handleScope(scope: Scope) {
 
   // Listener can be called when breadcrumbs have not changed, so we store the
   // reference to the last crumb and only return a crumb if it has changed
-  if (_LAST_BREADCRUMB === newBreadcrumb) {
+  if (_LAST_BREADCRUMB === newBreadcrumb || !newBreadcrumb) {
     return null;
   }
 

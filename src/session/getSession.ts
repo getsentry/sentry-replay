@@ -1,8 +1,9 @@
-import { isSessionExpired } from '@/util/isSessionExpired';
-import { logger } from '@/util/logger';
+import { isSessionExpired } from '../util/isSessionExpired';
+import { logger } from '../util/logger';
+
 import { createSession } from './createSession';
 import { fetchSession } from './fetchSession';
-import { ReplaySession } from './types';
+import { Session } from './Session';
 
 interface GetSessionParams {
   /**
@@ -17,7 +18,13 @@ interface GetSessionParams {
   /**
    * The current session (e.g. if stickySession is off)
    */
-  currentSession?: ReplaySession;
+  currentSession?: Session;
+
+  /**
+   * The sampling rate of the Session. See integration configuration comments
+   * for `replaysSamplingRate`.
+   */
+  samplingRate?: number;
 }
 
 /**
@@ -27,8 +34,10 @@ export function getSession({
   expiry,
   currentSession,
   stickySession,
+  samplingRate,
 }: GetSessionParams) {
-  const session = stickySession ? fetchSession() : currentSession;
+  // If session exists and is passed, use it instead of always hitting session storage
+  const session = currentSession || (stickySession && fetchSession());
 
   if (session) {
     // If there is a session, check if it is valid (e.g. "last activity" time should be within the "session idle time")
@@ -36,15 +45,14 @@ export function getSession({
     const isExpired = isSessionExpired(session, expiry);
 
     if (!isExpired) {
-      logger.log(`Using existing session: ${session.id}`);
-      return session;
+      return { type: 'saved', session };
     } else {
       logger.log(`Session has expired`);
     }
     // Otherwise continue to create a new session
   }
 
-  const newSession = createSession({ stickySession });
+  const newSession = createSession({ stickySession, samplingRate });
 
-  return newSession;
+  return { type: 'new', session: newSession };
 }

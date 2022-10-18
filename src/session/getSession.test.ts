@@ -1,11 +1,11 @@
-import { it, expect, vi, beforeAll, afterEach, MockedFunction } from 'vitest';
-
 import * as SentryUtils from '@sentry/utils';
+import { afterEach, beforeAll, expect, it, MockedFunction, vi } from 'vitest';
 
 import * as CreateSession from './createSession';
 import * as FetchSession from './fetchSession';
 import { getSession } from './getSession';
 import { saveSession } from './saveSession';
+import { Session } from './Session';
 
 vi.mock('@sentry/utils', async () => {
   const actual = (await vi.importActual('@sentry/utils')) as typeof SentryUtils;
@@ -17,12 +17,12 @@ vi.mock('@sentry/utils', async () => {
 });
 
 function createMockSession(when: number = new Date().getTime()) {
-  return {
+  return new Session({
     id: 'test_session_id',
-    sequenceId: 0,
+    segmentId: 0,
     lastActivity: when,
     started: when,
-  };
+  });
 }
 
 beforeAll(() => {
@@ -46,15 +46,16 @@ afterEach(() => {
 });
 
 it('creates a non-sticky session when one does not exist', function () {
-  const session = getSession({ expiry: 900000, stickySession: false });
+  const { session } = getSession({ expiry: 900000, stickySession: false });
 
   expect(FetchSession.fetchSession).not.toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
 
-  expect(session).toEqual({
+  expect(session.toJSON()).toEqual({
     id: 'test_session_id',
-    sequenceId: 0,
+    segmentId: 0,
     lastActivity: expect.any(Number),
+    sampled: true,
     started: expect.any(Number),
   });
 
@@ -65,7 +66,7 @@ it('creates a non-sticky session when one does not exist', function () {
 it('creates a non-sticky session, regardless of session existing in sessionStorage', function () {
   saveSession(createMockSession(new Date().getTime() - 10000));
 
-  const session = getSession({ expiry: 1000, stickySession: false });
+  const { session } = getSession({ expiry: 1000, stickySession: false });
 
   expect(FetchSession.fetchSession).not.toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
@@ -74,15 +75,15 @@ it('creates a non-sticky session, regardless of session existing in sessionStora
 });
 
 it('creates a non-sticky session, when one is expired', function () {
-  const session = getSession({
+  const { session } = getSession({
     expiry: 1000,
     stickySession: false,
-    currentSession: {
+    currentSession: new Session({
       id: 'old_session_id',
       lastActivity: new Date().getTime() - 1001,
       started: new Date().getTime() - 1001,
-      sequenceId: 0,
-    },
+      segmentId: 0,
+    }),
   });
 
   expect(FetchSession.fetchSession).not.toHaveBeenCalled();
@@ -95,23 +96,25 @@ it('creates a non-sticky session, when one is expired', function () {
 it('creates a sticky session when one does not exist', function () {
   expect(FetchSession.fetchSession()).toBe(null);
 
-  const session = getSession({ expiry: 900000, stickySession: true });
+  const { session } = getSession({ expiry: 900000, stickySession: true });
 
   expect(FetchSession.fetchSession).toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
 
-  expect(session).toEqual({
+  expect(session.toJSON()).toEqual({
     id: 'test_session_id',
-    sequenceId: 0,
+    segmentId: 0,
     lastActivity: expect.any(Number),
+    sampled: true,
     started: expect.any(Number),
   });
 
   // Should not have anything in storage
-  expect(FetchSession.fetchSession()).toEqual({
+  expect(FetchSession.fetchSession()?.toJSON()).toEqual({
     id: 'test_session_id',
-    sequenceId: 0,
+    segmentId: 0,
     lastActivity: expect.any(Number),
+    sampled: true,
     started: expect.any(Number),
   });
 });
@@ -120,15 +123,16 @@ it('fetches an existing sticky session', function () {
   const now = new Date().getTime();
   saveSession(createMockSession(now));
 
-  const session = getSession({ expiry: 1000, stickySession: true });
+  const { session } = getSession({ expiry: 1000, stickySession: true });
 
   expect(FetchSession.fetchSession).toHaveBeenCalled();
   expect(CreateSession.createSession).not.toHaveBeenCalled();
 
-  expect(session).toEqual({
+  expect(session.toJSON()).toEqual({
     id: 'test_session_id',
-    sequenceId: 0,
+    segmentId: 0,
     lastActivity: now,
+    sampled: true,
     started: now,
   });
 });
@@ -137,7 +141,7 @@ it('fetches an expired sticky session', function () {
   const now = new Date().getTime();
   saveSession(createMockSession(new Date().getTime() - 2000));
 
-  const session = getSession({ expiry: 1000, stickySession: true });
+  const { session } = getSession({ expiry: 1000, stickySession: true });
 
   expect(FetchSession.fetchSession).toHaveBeenCalled();
   expect(CreateSession.createSession).toHaveBeenCalled();
@@ -145,24 +149,24 @@ it('fetches an expired sticky session', function () {
   expect(session.id).toBe('test_session_id');
   expect(session.lastActivity).toBeGreaterThanOrEqual(now);
   expect(session.started).toBeGreaterThanOrEqual(now);
-  expect(session.sequenceId).toBe(0);
+  expect(session.segmentId).toBe(0);
 });
 
 it('fetches a non-expired non-sticky session', function () {
-  const session = getSession({
+  const { session } = getSession({
     expiry: 1000,
     stickySession: false,
-    currentSession: {
+    currentSession: new Session({
       id: 'test_session_id_2',
       lastActivity: +new Date() - 500,
       started: +new Date() - 500,
-      sequenceId: 0,
-    },
+      segmentId: 0,
+    }),
   });
 
   expect(FetchSession.fetchSession).not.toHaveBeenCalled();
   expect(CreateSession.createSession).not.toHaveBeenCalled();
 
   expect(session.id).toBe('test_session_id_2');
-  expect(session.sequenceId).toBe(0);
+  expect(session.segmentId).toBe(0);
 });

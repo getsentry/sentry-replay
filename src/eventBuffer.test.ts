@@ -1,10 +1,10 @@
-import { vi, it, expect } from 'vitest';
+import 'jsdom-worker';
 
 import { BASE_TIMESTAMP } from '@test';
-import { createEventBuffer, EventBufferCompressionWorker } from './eventBuffer';
-import { handleMessage } from '../worker/src/handleMessage';
-import { WorkerRequest, WorkerResponse } from './types';
 import pako from 'pako';
+import { expect, it } from 'vitest';
+
+import { createEventBuffer, EventBufferCompressionWorker } from './eventBuffer';
 
 const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
 
@@ -32,65 +32,25 @@ it('adds checkout event to normal event buffer', async function () {
   expect(result).toEqual(JSON.stringify([TEST_EVENT]));
 });
 
-const workerPostMessage = vi.fn();
-window.postMessage = workerPostMessage;
+it('calling `finish()` multiple times does not result in duplicated events', async function () {
+  const buffer = createEventBuffer({ useCompression: false });
 
-class MockWorker implements Worker {
-  constructor() {
-    workerPostMessage.mockImplementation((data: WorkerResponse) => {
-      const listeners = this.listeners.get('message');
+  buffer.addEvent(TEST_EVENT);
 
-      if (listeners) {
-        listeners.forEach((listener) =>
-          listener({ data } as MessageEvent<WorkerResponse>)
-        );
-      }
-    });
-  }
-  listeners = new Map([
-    ['message', new Set<(e: MessageEvent<WorkerResponse>) => void>()],
-  ]);
+  const promise1 = buffer.finish();
+  const promise2 = buffer.finish();
 
-  terminate() {
-    this.listeners = new Map();
-  }
+  const result1 = (await promise1) as Uint8Array;
+  const result2 = (await promise2) as Uint8Array;
 
-  addEventListener(
-    type: string,
-    listener: (e: MessageEvent<WorkerResponse>) => void
-  ) {
-    const typeListener = this.listeners.get(type);
-
-    if (typeListener) {
-      typeListener.add(listener);
-    }
-  }
-
-  removeEventListener(
-    type: string,
-    listener: (e: MessageEvent<WorkerResponse>) => void
-  ) {
-    const typeListener = this.listeners.get(type);
-
-    if (typeListener) {
-      typeListener.delete(listener);
-    }
-  }
-
-  postMessage(data: WorkerRequest) {
-    handleMessage({ data } as MessageEvent<WorkerRequest>);
-  }
-  onmessageerror: (this: Worker, ev: MessageEvent<any>) => any;
-  onmessage: (this: Worker, ev: MessageEvent<any>) => any;
-  onerror: (this: AbstractWorker, ev: ErrorEvent) => any;
-  dispatchEvent(event: Event): boolean {
-    return true;
-  }
-}
+  expect(result1).toEqual(JSON.stringify([TEST_EVENT]));
+  expect(result2).toEqual(JSON.stringify([]));
+});
 
 it('adds events to event buffer with compression worker', async function () {
-  const worker = new MockWorker();
-  const buffer = new EventBufferCompressionWorker(worker);
+  const buffer = createEventBuffer({
+    useCompression: true,
+  }) as EventBufferCompressionWorker;
 
   buffer.addEvent(TEST_EVENT);
   buffer.addEvent(TEST_EVENT);
@@ -102,17 +62,59 @@ it('adds events to event buffer with compression worker', async function () {
 });
 
 it('adds checkout events to event buffer with compression worker', async function () {
-  const worker = new MockWorker();
-  const buffer = new EventBufferCompressionWorker(worker);
+  const buffer = createEventBuffer({
+    useCompression: true,
+  }) as EventBufferCompressionWorker;
 
-  buffer.addEvent(TEST_EVENT);
-  buffer.addEvent(TEST_EVENT);
+  await buffer.addEvent(TEST_EVENT);
+  await buffer.addEvent(TEST_EVENT);
 
   // This should clear previous buffer
-  buffer.addEvent({ ...TEST_EVENT, type: 2 }, true);
+  await buffer.addEvent({ ...TEST_EVENT, type: 2 }, true);
 
   const result = await buffer.finish();
   const restored = pako.inflate(result, { to: 'string' });
 
   expect(restored).toEqual(JSON.stringify([{ ...TEST_EVENT, type: 2 }]));
+});
+
+it('calling `finish()` multiple times does not result in duplicated events', async function () {
+  const buffer = createEventBuffer({
+    useCompression: true,
+  }) as EventBufferCompressionWorker;
+
+  buffer.addEvent(TEST_EVENT);
+
+  const promise1 = buffer.finish();
+  const promise2 = buffer.finish();
+
+  const result1 = (await promise1) as Uint8Array;
+  const result2 = (await promise2) as Uint8Array;
+  const restored1 = pako.inflate(result1, { to: 'string' });
+  const restored2 = pako.inflate(result2, { to: 'string' });
+
+  expect(restored1).toEqual(JSON.stringify([TEST_EVENT]));
+  expect(restored2).toEqual(JSON.stringify([]));
+});
+
+it('calling `finish()` multiple times, with events in between, does not result in duplicated or dropped events', async function () {
+  const buffer = createEventBuffer({
+    useCompression: true,
+  }) as EventBufferCompressionWorker;
+
+  buffer.addEvent(TEST_EVENT);
+
+  const promise1 = buffer.finish();
+
+  buffer.addEvent({ ...TEST_EVENT, type: 5 });
+  const promise2 = buffer.finish();
+
+  const result1 = (await promise1) as Uint8Array;
+  const result2 = (await promise2) as Uint8Array;
+
+  const restored1 = pako.inflate(result1, { to: 'string' });
+  const restored2 = pako.inflate(result2, { to: 'string' });
+
+  expect(restored1).toEqual(JSON.stringify([TEST_EVENT]));
+  expect(restored2).toEqual(JSON.stringify([{ ...TEST_EVENT, type: 5 }]));
 });

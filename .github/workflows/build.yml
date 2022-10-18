@@ -11,19 +11,27 @@ jobs:
     name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: volta-cli/action@v1
-      - uses: actions/cache@v2
-        id: cache
+      - uses: actions/checkout@v3
+
+      - id: versions
+        run: |
+          echo "::set-output name=node::$(jq -r '.volta.node' package.json)"
+
+      - uses: actions/setup-node@v3
         with:
-          path: node_modules
-          key: ${{ runner.os }}-${{ hashFiles('package.json', 'yarn.lock') }}
+          node-version: ${{ steps.versions.outputs.node }}
+          cache: 'yarn'
+
       - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: yarn install --frozen-lockfile
-      - run: yarn test:ci
-      - run: yarn build
-      - run: yarn pack
+        run: |
+          yarn install --frozen-lockfile
+
+      - run: |
+          yarn test:ci
+
+      - run: |
+          yarn pack
+
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ github.sha }}

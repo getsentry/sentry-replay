@@ -1,52 +1,70 @@
-import type { eventWithTime } from 'rrweb/typings/types';
+import type { eventWithTime, recordOptions } from 'rrweb/typings/types';
 
-import { record } from 'rrweb';
+export type RecordingEvent = eventWithTime;
+export type RecordingOptions = recordOptions<eventWithTime>;
 
-export type RRWebEvent = eventWithTime;
-export type RRWebOptions = Parameters<typeof record>[0];
+export type RecordedEvents = Uint8Array | string;
 
-export interface ReplaySpan {
-  description: string;
-  op: string;
-  startTimestamp: number;
-  endTimestamp: number;
-  data?: Record<string, unknown>;
-}
+export type AllPerformanceEntry =
+  | PerformancePaintTiming
+  | PerformanceResourceTiming
+  | PerformanceNavigationTiming;
 
-export interface ReplayRequest {
+export interface SendReplayRequest {
   endpoint: string;
-  events: Uint8Array | string;
+  events: RecordedEvents;
+  replayId: string;
+  segmentId: number;
+  includeReplayStartTimestamp: boolean;
 }
 
-export type InstrumentationType = 'scope' | 'dom' | 'fetch' | 'xhr';
+export type InstrumentationTypeBreadcrumb = 'dom' | 'scope';
+export type InstrumentationTypeSpan = 'fetch' | 'xhr' | 'history';
+export type InstrumentationType =
+  | InstrumentationTypeBreadcrumb
+  | InstrumentationTypeSpan
+  | 'console'
+  | 'error'
+  | 'unhandledrejection';
 
 /**
  * The request payload to worker
  */
 export interface WorkerRequest {
+  id: number;
   method: string;
   args: any[];
+}
+
+declare global {
+  const __SENTRY_REPLAY_VERSION__: string;
 }
 
 /**
  * The response from the worker
  */
 export interface WorkerResponse {
+  id: number;
   method: string;
   success: boolean;
   response: string | Uint8Array;
 }
 
-export interface SentryReplayPluginOptions {
+export interface ReplayPluginOptions {
   /**
    * The amount of time to wait before sending a replay
    */
-  uploadMinDelay?: number;
+  flushMinDelay?: number;
 
   /**
    * The max amount of time to wait before sending a replay
    */
-  uploadMaxDelay?: number;
+  flushMaxDelay?: number;
+
+  /**
+   * The amount of time to buffer the initial snapshot
+   */
+  initialFlushDelay?: number;
 
   /**
    * If false, will create a new session per pageload
@@ -59,11 +77,61 @@ export interface SentryReplayPluginOptions {
    * (default is true)
    */
   useCompression?: boolean;
+
+  /**
+   * Only capture replays when an error happens
+   */
+  captureOnlyOnError?: boolean;
+
+  /**
+   * The sampling rate for replays. 1.0 will record all replays, 0 will record none.
+   */
+  replaysSamplingRate?: number;
+
+  /**
+   * Mask all text in recordings. All text will be replaced with asterisks by default.
+   */
+  maskAllText?: boolean;
+
+  /**
+   * Block all media (e.g. images, svg, video) in recordings.
+   */
+  blockAllMedia?: boolean;
 }
 
-export interface SentryReplayConfiguration extends SentryReplayPluginOptions {
+export interface ReplayConfiguration
+  extends ReplayPluginOptions,
+    RecordingOptions {}
+
+/**
+ * Some initial state captured before creating a root replay event
+ */
+export interface InitialState {
+  timestamp: number;
+  url: string;
+}
+
+/**
+ * Additional context that will be sent w/ `replay_event`
+ */
+export interface ReplayEventContext {
   /**
-   * Options for `rrweb.recordsetup
+   * Set of Sentry error ids that have occurred during a replay segment
    */
-  rrwebConfig?: RRWebOptions;
+  errorIds: Set<string>;
+
+  /**
+   * Set of Sentry trace ids that have occurred during a replay segment
+   */
+  traceIds: Set<string>;
+
+  /**
+   * Ordered list of URLs that have been visited during a replay segment
+   */
+  urls: string[];
+
+  /**
+   * The timestamp of the earliest event that has been added to event buffer. This can happen due to the Performance Observer which buffers events.
+   */
+  earliestEvent: number | null;
 }
