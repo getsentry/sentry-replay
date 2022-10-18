@@ -1,6 +1,7 @@
 import { PerformanceEntryLcp } from '@test/fixtures/performanceEntry/lcp';
 import { PerformanceEntryNavigation } from '@test/fixtures/performanceEntry/navigation';
 import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
+import { expect, it } from 'vitest';
 
 import { dedupePerformanceEntries } from './dedupePerformanceEntries';
 

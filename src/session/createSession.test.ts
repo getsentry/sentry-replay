@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/core';
 import * as SentryUtils from '@sentry/utils';
-import { beforeAll, expect, it, MockedFunction, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, MockedFunction, vi } from 'vitest';
 
 import { createSession } from './createSession';
 import { saveSession } from './saveSession';
@@ -18,16 +18,22 @@ vi.mock('@sentry/utils', async () => {
   };
 });
 
-type captureEventMockType = vi.MockedFunction<typeof Sentry.captureEvent>;
+type captureEventMockType = MockedFunction<typeof Sentry.captureEvent>;
 
 const captureEventMock: captureEventMockType = vi.fn();
 
+vi.mock('@sentry/core', async () => {
+  const actual = (await vi.importActual('@sentry/core')) as typeof Sentry;
+  return {
+    ...actual,
+    getCurrentHub: vi.fn(() => ({
+      captureEvent: captureEventMock,
+    })),
+  };
+});
+
 beforeAll(() => {
   window.sessionStorage.clear();
-  vi.spyOn(Sentry, 'getCurrentHub');
-  (Sentry.getCurrentHub as vi.Mock).mockImplementation(() => ({
-    captureEvent: captureEventMock,
-  }));
 });
 
 afterEach(() => {

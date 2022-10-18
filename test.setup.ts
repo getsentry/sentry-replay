@@ -1,4 +1,11 @@
-import { expect, MockedObject } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  expect,
+  MockedFunction,
+  MockedObject,
+  vi,
+} from 'vitest';
 
 import { Session } from './src/session/Session';
 import { Replay } from './src';
@@ -11,11 +18,11 @@ type Fetch = (
   init?: RequestInit | undefined
 ) => Promise<Response>;
 
-type MockFetch = jest.MockedFunction<Fetch>;
+type MockFetch = MockedFunction<Fetch>;
 
 // Not the best fetch mock, but probably good enough - (remove the
 // Headers/Response casts to see unmocked behavior)
-const mockFetch = jest.fn(
+const mockFetch = vi.fn(
   (_input: RequestInfo | URL) =>
     new Promise<Response>((resolve) => {
       resolve({
@@ -42,7 +49,7 @@ beforeAll(() => {
       return;
     }
 
-    jest.spyOn(global, 'fetch');
+    vi.spyOn(global, 'fetch');
     (global.fetch as MockFetch).mockImplementation(mockFetch);
   }
 });

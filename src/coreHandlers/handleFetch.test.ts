@@ -1,8 +1,9 @@
 import { mockSdk } from '@test';
+import { beforeAll, expect, it, vi } from 'vitest';
 
 import { handleFetch } from './handleFetch';
 
-jest.unmock('@sentry/browser');
+vi.unmock('@sentry/browser');
 
 beforeAll(function () {
   mockSdk();

@@ -1,3 +1,5 @@
+import { expect, it } from 'vitest';
+
 import { REPLAY_SESSION_KEY } from './constants';
 import { deleteSession } from './deleteSession';
 

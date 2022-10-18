@@ -1,3 +1,5 @@
+import { describe, expect, MockedFunction, test, vi } from 'vitest';
+
 import { isSampled } from './isSampled';
 
 // Note Math.random generates a value from 0 (inclusive) to <1 (1 exclusive).
@@ -13,8 +15,8 @@ const cases = [
   [0.5, 0.0, true],
 ];
 
-jest.spyOn(Math, 'random');
-const mockRandom = Math.random as jest.MockedFunction<typeof Math.random>;
+vi.spyOn(Math, 'random');
+const mockRandom = Math.random as MockedFunction<typeof Math.random>;
 
 describe('isSampled', () => {
   test.each(cases)(

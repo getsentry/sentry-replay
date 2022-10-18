@@ -32,13 +32,25 @@ describe('Replay (no sticky)', () => {
 
   beforeAll(async () => {
     vi.setSystemTime(new Date(BASE_TIMESTAMP));
-    vi.spyOn(SentryUtils, 'addInstrumentationHandler').mockImplementation(
-      (type, handler: (args: any) => any) => {
-        if (type === 'dom') {
-          domHandler = handler;
-        }
+    vi.mock('@sentry/utils', async () => {
+      const actual = (await vi.importActual(
+        '@sentry/utils'
+      )) as typeof SentryUtils;
+      return {
+        ...actual,
+        logger: actual.logger,
+        addInstrumentationHandler: vi.fn(),
+      };
+    });
+    (
+      SentryUtils.addInstrumentationHandler as MockedFunction<
+        typeof SentryUtils.addInstrumentationHandler
+      >
+    ).mockImplementation((_type, handler: (args: any) => any) => {
+      if (_type === 'dom') {
+        domHandler = handler;
       }
-    );
+    });
 
     ({ replay } = await mockSdk({ replayOptions: { stickySession: false } }));
     vi.runAllTimers();
@@ -258,7 +270,7 @@ describe('Replay (no sticky)', () => {
     await advanceTimers(5000);
 
     const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
-    const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+    const breadcrumbTimestamp = newTimestamp;
 
     expect(replay).toHaveSentReplay({
       events: JSON.stringify([

@@ -1,17 +1,28 @@
 import * as SentryUtils from '@sentry/utils';
 // mock functions need to be imported first
 import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  MockedFunction,
+  vi,
+} from 'vitest';
 
 import { SESSION_IDLE_DURATION } from './session/constants';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+vi.useFakeTimers();
 
 describe('Replay - stop', () => {
   let replay: Replay;
   const prevLocation = window.location;
 
-  type MockAddInstrumentationHandler = jest.MockedFunction<
+  type MockAddInstrumentationHandler = MockedFunction<
     typeof SentryUtils.addInstrumentationHandler
   >;
   const { record: mockRecord } = mockRrweb();
@@ -19,33 +30,40 @@ describe('Replay - stop', () => {
   let mockAddInstrumentationHandler: MockAddInstrumentationHandler;
 
   beforeAll(async () => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    mockAddInstrumentationHandler = jest.spyOn(
-      SentryUtils,
-      'addInstrumentationHandler'
-    ) as MockAddInstrumentationHandler;
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.mock('@sentry/utils', async () => {
+      const actual = (await vi.importActual(
+        '@sentry/utils'
+      )) as typeof SentryUtils;
+      return {
+        ...actual,
+        logger: actual.logger,
+        addInstrumentationHandler: vi.fn(),
+      };
+    });
+    mockAddInstrumentationHandler =
+      SentryUtils.addInstrumentationHandler as MockAddInstrumentationHandler;
 
     ({ replay } = await mockSdk());
-    jest.spyOn(replay, 'sendReplayRequest');
-    jest.runAllTimers();
+    vi.spyOn(replay, 'sendReplayRequest');
+    vi.runAllTimers();
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     replay.eventBuffer?.destroy();
   });
 
   afterEach(async () => {
-    jest.runAllTimers();
-    await new Promise(process.nextTick);
-    jest.setSystemTime(new Date(BASE_TIMESTAMP));
+    vi.runAllTimers();
+    // await new Promise(process.nextTick);
+    vi.setSystemTime(new Date(BASE_TIMESTAMP));
     sessionStorage.clear();
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
     mockRecord.takeFullSnapshot.mockClear();
     mockAddInstrumentationHandler.mockClear();
     // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
-    delete window.location;
     Object.defineProperty(window, 'location', {
       value: prevLocation,
       writable: true,
@@ -64,15 +82,14 @@ describe('Replay - stop', () => {
       },
     });
     const ELAPSED = 5000;
-    // Not sure where the 20ms comes from tbh
-    const EXTRA_TICKS = 20;
+    const EXTRA_TICKS = 0;
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 2 };
 
     // stop replays
     replay.stop();
 
     // Pretend 5 seconds have passed
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
@@ -88,7 +105,7 @@ describe('Replay - stop', () => {
     // re-enable replay
     replay.start();
 
-    jest.advanceTimersByTime(ELAPSED);
+    vi.advanceTimersByTime(ELAPSED);
 
     const timestamp =
       +new Date(BASE_TIMESTAMP + ELAPSED + ELAPSED + EXTRA_TICKS) / 1000;
@@ -108,7 +125,6 @@ describe('Replay - stop', () => {
 
     replay.addEvent(TEST_EVENT);
     window.dispatchEvent(new Event('blur'));
-    jest.runAllTimers();
     await new Promise(process.nextTick);
     expect(replay.sendReplayRequest).toHaveBeenCalled();
     expect(replay).toHaveSentReplay({
@@ -116,7 +132,7 @@ describe('Replay - stop', () => {
     });
     // Session's last activity is last updated when we call `setup()` and *NOT*
     // when tab is blurred
-    expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED + 20);
+    expect(replay.session?.lastActivity).toBe(BASE_TIMESTAMP + ELAPSED);
   });
 
   it('does not buffer events when stopped', async function () {

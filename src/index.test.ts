@@ -1,4 +1,3 @@
-import * as SentryCore from '@sentry/core';
 import * as SentryUtils from '@sentry/utils';
 import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
@@ -26,6 +25,7 @@ vi.useFakeTimers();
 
 async function advanceTimers(time: number) {
   vi.advanceTimersByTime(time);
+  await new Promise(process.nextTick);
 }
 
 type MockFetch = MockedFunction<typeof fetch>;
@@ -58,7 +58,9 @@ describe('Replay', () => {
         typeof SentryUtils.addInstrumentationHandler
       >
     ).mockImplementation((_type, handler: (args: any) => any) => {
-      domHandler = handler;
+      if (_type === 'dom') {
+        domHandler = handler;
+      }
     });
 
     ({ replay } = await mockSdk());
@@ -82,8 +84,6 @@ describe('Replay', () => {
     sessionStorage.clear();
     replay.clearSession();
     replay.loadSession({ expiry: SESSION_IDLE_DURATION });
-    // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
-    delete window.location;
     Object.defineProperty(window, 'location', {
       value: prevLocation,
       writable: true,
@@ -323,7 +323,7 @@ describe('Replay', () => {
     expect(initialSession?.id).toBeDefined();
     // @ts-expect-error private member
     expect(replay.initialState).toEqual({
-      url: 'http://localhost/',
+      url: 'http://localhost:3000/',
       timestamp: BASE_TIMESTAMP,
     });
 
@@ -369,7 +369,7 @@ describe('Replay', () => {
     await advanceTimers(5000);
 
     const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
-    const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+    const breadcrumbTimestamp = newTimestamp;
 
     expect(replay).toHaveSentReplay({
       events: JSON.stringify([
@@ -472,7 +472,7 @@ describe('Replay', () => {
         // 20seconds = Add up all of the previous `advanceTimers()`
         timestamp: (BASE_TIMESTAMP + 20000) / 1000,
         trace_ids: [],
-        urls: ['http://localhost/'],
+        urls: ['http://localhost:3000/'],
       }),
       recordingPayloadHeader: { segment_id: 0 },
       events: JSON.stringify([TEST_EVENT]),
@@ -491,7 +491,6 @@ describe('Replay', () => {
   it('fails to upload data and hits retry max and stops', async () => {
     const TEST_EVENT = { data: {}, timestamp: BASE_TIMESTAMP, type: 3 };
     vi.spyOn(replay, 'sendReplay');
-    vi.spyOn(SentryCore, 'captureException');
     // Suppress console.errors
     vi.spyOn(console, 'error').mockImplementation(vi.fn());
     const mockConsole = console.error as vi.MockedFunction<
@@ -608,7 +607,7 @@ describe('Replay', () => {
     expect(replay).toHaveSentReplay({
       replayEventPayload: expect.objectContaining({
         replay_start_timestamp: BASE_TIMESTAMP / 1000,
-        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+        urls: ['http://localhost:3000/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
       }),
     });
   });
@@ -701,14 +700,19 @@ describe('Replay', () => {
     expect(replay).toHaveSentReplay({
       replayEventPayload: expect.objectContaining({
         replay_start_timestamp: (BASE_TIMESTAMP - 10000) / 1000,
-        urls: ['http://localhost/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
+        urls: ['http://localhost:3000/'], // this doesn't truly test if we are capturing the right URL as we don't change URLs, but good enough
       }),
     });
   });
 
   it('does not have stale `replay_start_timestamp`', async function () {
+    const prevPerformance = window.performance;
+    Object.defineProperty(window, 'performance', {
+      value: prevPerformance,
+      writable: true,
+    });
     // @ts-expect-error read-only
-    window.performance.timeOrigin = BASE_TIMESTAMP;
+    // window.performance.timeOrigin = BASE_TIMESTAMP;
     // add a fake/old performance event
     replay.performanceEvents.push(PerformanceEntryResource());
 

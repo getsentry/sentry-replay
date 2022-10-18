@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
 import path from 'path';
+
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   resolve: {
@@ -11,7 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    setupFiles: path.resolve(__dirname, 'test.setup.ts'),
+    setupFiles: [path.resolve(__dirname, 'test.setup.ts')],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',

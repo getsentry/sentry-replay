@@ -1,8 +1,9 @@
 import { mockSdk } from '@test';
+import { beforeAll, expect, it, vi } from 'vitest';
 
 import { createPerformanceEntries } from './createPerformanceEntry';
 
-jest.unmock('@sentry/browser');
+vi.unmock('@sentry/browser');
 
 beforeAll(function () {
   mockSdk();
