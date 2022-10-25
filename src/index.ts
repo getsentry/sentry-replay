@@ -490,7 +490,7 @@ export class Replay implements Integration {
     ) {
       // TODO: Do we continue to record after?
       // TODO: What happens if another error happens? Do we record in the same session?
-      setTimeout(() => this.flush());
+      setTimeout(() => this.flushImmediate());
     }
 
     return event;
@@ -889,7 +889,7 @@ export class Replay implements Integration {
       return;
     }
 
-    return this.flush();
+    this.flushImmediate();
   }
 
   /**
@@ -983,7 +983,7 @@ ${stack.slice(1).join('\n')}`,
 
   /**
    * Flush recording data to Sentry. Creates a lock so that only a single flush
-   * can be active at a time.
+   * can be active at a time. Do not call this directly.
    */
   flush = async () => {
     if (!this.isEnabled) {
@@ -1031,6 +1031,18 @@ ${stack.slice(1).join('\n')}`,
       this.debouncedFlush();
     }
   };
+
+  /**
+   *
+   * Always flush via `debouncedFlush` so that we do not have flushes triggered
+   * from calling both `flush` and `debouncedFlush`. Otherwise, there could be
+   * cases of mulitple flushes happening closely together.
+   */
+  flushImmediate() {
+    this.debouncedFlush();
+    // `.flush` is provided by lodash.debounce
+    this.debouncedFlush.flush();
+  }
 
   /**
    * Send replay attachment using `fetch()`
