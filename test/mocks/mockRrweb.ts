@@ -22,6 +22,10 @@ jest.mock('rrweb', () => {
   const mockRecordFn: jest.Mock & Partial<RecordAdditionalProperties> = jest.fn(
     ({ emit }) => {
       mockRecordFn._emitter = emit;
+
+      return function stop() {
+        mockRecordFn._emitter = jest.fn();
+      };
     }
   );
   mockRecordFn.takeFullSnapshot = jest.fn((isCheckout) => {

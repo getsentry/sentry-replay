@@ -5,14 +5,18 @@ import {
   setContext,
 } from '@sentry/core';
 import { Breadcrumb, Event, Integration } from '@sentry/types';
-import { addInstrumentationHandler } from '@sentry/utils';
-import { createEnvelope, serializeEnvelope } from '@sentry/utils';
+import {
+  addInstrumentationHandler,
+  createEnvelope,
+  serializeEnvelope,
+} from '@sentry/utils';
 import debounce from 'lodash.debounce';
 import { EventType, record } from 'rrweb';
 
 import { getBreadcrumbHandler } from './coreHandlers/getBreadcrumbHandler';
 import { getSpanHandler } from './coreHandlers/getSpanHandler';
 import {
+  MAX_SESSION_LIFE,
   REPLAY_EVENT_NAME,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
@@ -22,9 +26,10 @@ import { getSession } from './session/getSession';
 import { Session } from './session/Session';
 import { addInternalBreadcrumb } from './util/addInternalBreadcrumb';
 import { captureInternalException } from './util/captureInternalException';
-import createBreadcrumb from './util/createBreadcrumb';
+import { createBreadcrumb } from './util/createBreadcrumb';
 import { createPayload } from './util/createPayload';
 import { dedupePerformanceEntries } from './util/dedupePerformanceEntries';
+import { isExpired } from './util/isExpired';
 import { isSessionExpired } from './util/isSessionExpired';
 import { logger } from './util/logger';
 import {
@@ -101,6 +106,11 @@ export class Replay implements Integration {
   private newSessionCreated = false;
 
   private flushLock: Promise<unknown> | null = null;
+
+  /**
+   * Timestamp of the last user activity. This lives across sessions.
+   */
+  private lastActivity: number = new Date().getTime();
 
   /**
    * Is the integration currently active?
@@ -263,41 +273,19 @@ export class Replay implements Integration {
     // replay ID so that we can reference them later in the UI
     addGlobalEventProcessor(this.handleGlobalEvent);
 
-    this.stopRecording = record({
-      ...this.recordingOptions,
-      emit: this.handleRecordingEmit,
-    });
+    this.startRecording();
 
     this.isEnabled = true;
   }
 
   /**
-   * We want to batch uploads of replay events. Save events only if
-   * `<flushMinDelay>` milliseconds have elapsed since the last event
-   * *OR* if `<flushMaxDelay>` milliseconds have elapsed.
-   *
-   * Accepts a callback to perform side-effects and returns true to stop batch
-   * processing and hand back control to caller.
+   * Start recording
    */
-  addUpdate(cb?: AddUpdateCallback) {
-    // We need to always run `cb` (e.g. in the case of captureOnlyOnError == true)
-    const cbResult = cb?.();
-
-    // If this option is turned on then we will only want to call `flush`
-    // explicitly
-    if (this.options.captureOnlyOnError) {
-      return;
-    }
-
-    // If callback is true, we do not want to continue with flushing -- the
-    // caller will need to handle it.
-    if (cbResult === true) {
-      return;
-    }
-
-    // addUpdate is called quite frequently - use debouncedFlush so that it
-    // respects the flush delays and does not flush immediately
-    this.debouncedFlush();
+  startRecording() {
+    this.stopRecording = record({
+      ...this.recordingOptions,
+      emit: this.handleRecordingEmit,
+    });
   }
 
   /**
@@ -443,6 +431,35 @@ export class Replay implements Integration {
       this.performanceObserver.disconnect();
       this.performanceObserver = null;
     }
+  }
+
+  /**
+   * We want to batch uploads of replay events. Save events only if
+   * `<flushMinDelay>` milliseconds have elapsed since the last event
+   * *OR* if `<flushMaxDelay>` milliseconds have elapsed.
+   *
+   * Accepts a callback to perform side-effects and returns true to stop batch
+   * processing and hand back control to caller.
+   */
+  addUpdate(cb?: AddUpdateCallback) {
+    // We need to always run `cb` (e.g. in the case of captureOnlyOnError == true)
+    const cbResult = cb?.();
+
+    // If this option is turned on then we will only want to call `flush`
+    // explicitly
+    if (this.options.captureOnlyOnError) {
+      return;
+    }
+
+    // If callback is true, we do not want to continue with flushing -- the
+    // caller will need to handle it.
+    if (cbResult === true) {
+      return;
+    }
+
+    // addUpdate is called quite frequently - use debouncedFlush so that it
+    // respects the flush delays and does not flush immediately
+    this.debouncedFlush();
   }
 
   /**
@@ -607,10 +624,15 @@ export class Replay implements Integration {
         return;
       }
 
-      if (type === 'history') {
+      const isHistory = type === 'history';
+
+      if (isHistory) {
+        const now = new Date().getTime();
         // Need to collect visited URLs
         this.context.urls.push(result.name);
-        this.updateLastActivity();
+        this.lastActivity = now;
+        this.checkAndHandleExpiredSession();
+        this.updateLastActivity(now);
       }
 
       this.addUpdate(() => {
@@ -644,8 +666,13 @@ export class Replay implements Integration {
         return;
       }
 
-      if (result.category === 'ui.click') {
-        this.updateLastActivity();
+      const isUserClick = result.category === 'ui.click';
+
+      if (isUserClick) {
+        const now = new Date().getTime();
+        this.lastActivity = now;
+        this.checkAndHandleExpiredSession();
+        this.updateLastActivity(now);
       }
 
       this.addUpdate(() => {
@@ -686,9 +713,9 @@ export class Replay implements Integration {
       return;
     }
 
-    const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
+    const expired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
 
-    if (breadcrumb && !isExpired) {
+    if (breadcrumb && !expired) {
       this.createCustomBreadcrumb(breadcrumb);
     }
 
@@ -706,15 +733,25 @@ export class Replay implements Integration {
       return;
     }
 
-    const isExpired = isSessionExpired(this.session, VISIBILITY_CHANGE_TIMEOUT);
+    // This is intentional to update only `lastActivity` to indicate to
+    // `checkAndHandleExpiredSession` that an explicit(ish) user action has
+    // been performed so that we can resume recording agai to update only
+    // `lastActivity` to indicate to `checkAndHandleExpiredSession` that an
+    // explicit(ish) user action has been performed so that we can resume
+    // recording again. Calling `updateLastActivity()` will update the session
+    // last activity which means `checkAndHandleExpiredSession` will always
+    // incorrectly mark the section as not expired.
+    this.lastActivity = new Date().getTime();
 
-    if (isExpired) {
+    const isSessionActive = this.checkAndHandleExpiredSession(
+      VISIBILITY_CHANGE_TIMEOUT
+    );
+
+    if (!isSessionActive) {
       // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
       // ms, we will re-use the existing session, otherwise create a new
       // session
       logger.log('Document has become active, but session has expired');
-      this.loadSession({ expiry: VISIBILITY_CHANGE_TIMEOUT });
-      this.triggerFullSnapshot();
       return;
     }
 
@@ -722,10 +759,6 @@ export class Replay implements Integration {
       this.createCustomBreadcrumb(breadcrumb);
     }
 
-    // Otherwise if session is not expired...
-    // Update with current timestamp as the last session activity
-    // Only updating session on visibility change to be conservative about
-    // writing to session storage. This could be changed in the future.
     this.updateLastActivity();
   }
 
@@ -776,6 +809,7 @@ export class Replay implements Integration {
    * Updates the session's last activity timestamp
    */
   updateLastActivity(lastActivity: number = new Date().getTime()) {
+    this.lastActivity = lastActivity;
     if (this.session) {
       this.session.lastActivity = lastActivity;
     }
@@ -858,13 +892,34 @@ export class Replay implements Integration {
   checkAndHandleExpiredSession(expiry: number = SESSION_IDLE_DURATION) {
     const oldSessionId = this.session?.id;
 
+    // Prevent starting a new session if the last user activity is older than
+    // MAX_SESSION_LIFE. Otherwise non-user activity can trigger a new
+    // session+recording. This creates noisy replays that do not have much
+    // content in them.
+    if (this.lastActivity && isExpired(this.lastActivity, MAX_SESSION_LIFE)) {
+      // We should stop recording emitter if it exists
+      if (this.stopRecording) {
+        this.stopRecording();
+        this.stopRecording = undefined;
+      }
+
+      return;
+    }
+
+    // --- There is recent user activity --- //
+
+    // Ensure that recording is resumed
+    if (!this.stopRecording) {
+      this.startRecording();
+    }
+
     // This will create a new session if expired, based on expiry length
     this.loadSession({ expiry });
 
     // Session was expired if session ids do not match
-    const isExpired = oldSessionId !== this.session?.id;
+    const expired = oldSessionId !== this.session?.id;
 
-    if (!isExpired) {
+    if (!expired) {
       return true;
     }
 

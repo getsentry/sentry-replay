@@ -13,6 +13,7 @@ import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import { PerformanceEntryResource } from '@test/fixtures/performanceEntry/resource';
 
 import {
+  MAX_SESSION_LIFE,
   REPLAY_SESSION_KEY,
   SESSION_IDLE_DURATION,
   VISIBILITY_CHANGE_TIMEOUT,
@@ -70,17 +71,20 @@ describe('Replay', () => {
     jest.runAllTimers();
     await new Promise(process.nextTick);
     jest.setSystemTime(new Date(BASE_TIMESTAMP));
-    sessionStorage.clear();
-    replay.clearSession();
-    replay.loadSession({ expiry: SESSION_IDLE_DURATION });
     // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
     delete window.location;
     Object.defineProperty(window, 'location', {
       value: prevLocation,
       writable: true,
     });
+    sessionStorage.clear();
+    replay.clearSession();
+    replay.loadSession({ expiry: SESSION_IDLE_DURATION });
     jest.clearAllMocks();
     mockSendReplayRequest.mockRestore();
+    mockRecord.takeFullSnapshot.mockClear();
+    // @ts-expect-error private
+    replay.lastActivity = BASE_TIMESTAMP;
   });
 
   afterAll(() => {
@@ -307,7 +311,7 @@ describe('Replay', () => {
     expect(replay).toHaveSentReplay({ events: JSON.stringify([TEST_EVENT]) });
   });
 
-  it('creates a new session if user has been idle for more than 15 minutes and comes back to move their mouse', async () => {
+  it('creates a new session if user has been idle for 15 minutes and comes back to click their mouse', async () => {
     const initialSession = replay.session;
 
     expect(initialSession?.id).toBeDefined();
@@ -360,6 +364,82 @@ describe('Replay', () => {
 
     const newTimestamp = BASE_TIMESTAMP + FIFTEEN_MINUTES;
     const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
+
+    expect(replay).toHaveSentReplay({
+      events: JSON.stringify([
+        { data: { isCheckout: true }, timestamp: newTimestamp, type: 2 },
+        {
+          type: 5,
+          timestamp: breadcrumbTimestamp,
+          data: {
+            tag: 'breadcrumb',
+            payload: {
+              timestamp: breadcrumbTimestamp / 1000,
+              type: 'default',
+              category: `ui.click`,
+              message: '<unknown>',
+              data: {},
+            },
+          },
+        },
+      ]),
+    });
+
+    // `initialState` should be reset when a new session is created
+    // @ts-expect-error private member
+    expect(replay.initialState).toEqual({
+      url: 'http://dummy/',
+      timestamp: newTimestamp,
+    });
+  });
+
+  it('does not record if user has been idle for more than MAX_SESSION_LIFE and only starts a new session after a user action', async () => {
+    const initialSession = replay.session;
+
+    expect(initialSession?.id).toBeDefined();
+    // @ts-expect-error private member
+    expect(replay.initialState).toEqual({
+      url: 'http://localhost/',
+      timestamp: BASE_TIMESTAMP,
+    });
+
+    const url = 'http://dummy/';
+    Object.defineProperty(window, 'location', {
+      value: new URL(url),
+    });
+
+    // Idle for MAX_SESSION_LIFE
+    jest.advanceTimersByTime(MAX_SESSION_LIFE);
+
+    // These events will not get flushed and will eventually be dropped because user is idle and session is expired
+    const TEST_EVENT = {
+      data: { name: 'lost event' },
+      timestamp: MAX_SESSION_LIFE,
+      type: 3,
+    };
+    mockRecord._emitter(TEST_EVENT);
+    window.dispatchEvent(new Event('blur'));
+    await advanceTimers(5000);
+
+    expect(replay).not.toHaveSentReplay();
+    expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    // Should be the same session because user has been idle and no events have caused a new session to be created
+    expect(replay).toHaveSameSession(initialSession);
+
+    // @ts-expect-error private
+    expect(replay.stopRecording).toBeUndefined();
+
+    // Now do a click
+    domHandler({
+      name: 'click',
+    });
+
+    // new session is created
+    expect(replay).not.toHaveSameSession(initialSession);
+    await advanceTimers(5000);
+
+    const newTimestamp = BASE_TIMESTAMP + MAX_SESSION_LIFE + 5000 + 20; // I don't know where this 20ms comes from
+    const breadcrumbTimestamp = newTimestamp;
 
     expect(replay).toHaveSentReplay({
       events: JSON.stringify([
