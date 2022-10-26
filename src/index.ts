@@ -624,15 +624,11 @@ export class Replay implements Integration {
         return;
       }
 
-      const isHistory = type === 'history';
-
-      if (isHistory) {
-        const now = new Date().getTime();
+      if (type === 'history') {
         // Need to collect visited URLs
         this.context.urls.push(result.name);
-        this.lastActivity = now;
-        this.checkAndHandleExpiredSession();
-        this.updateLastActivity(now);
+        this.checkAndHandleExpiredSession({ updateUserActivity: true });
+        this.updateLastActivity();
       }
 
       this.addUpdate(() => {
@@ -666,13 +662,9 @@ export class Replay implements Integration {
         return;
       }
 
-      const isUserClick = result.category === 'ui.click';
-
-      if (isUserClick) {
-        const now = new Date().getTime();
-        this.lastActivity = now;
-        this.checkAndHandleExpiredSession();
-        this.updateLastActivity(now);
+      if (result.category === 'ui.click') {
+        this.checkAndHandleExpiredSession({ updateUserActivity: true });
+        this.updateLastActivity();
       }
 
       this.addUpdate(() => {
@@ -733,19 +725,10 @@ export class Replay implements Integration {
       return;
     }
 
-    // This is intentional to update only `lastActivity` to indicate to
-    // `checkAndHandleExpiredSession` that an explicit(ish) user action has
-    // been performed so that we can resume recording agai to update only
-    // `lastActivity` to indicate to `checkAndHandleExpiredSession` that an
-    // explicit(ish) user action has been performed so that we can resume
-    // recording again. Calling `updateLastActivity()` will update the session
-    // last activity which means `checkAndHandleExpiredSession` will always
-    // incorrectly mark the section as not expired.
-    this.lastActivity = new Date().getTime();
-
-    const isSessionActive = this.checkAndHandleExpiredSession(
-      VISIBILITY_CHANGE_TIMEOUT
-    );
+    const isSessionActive = this.checkAndHandleExpiredSession({
+      expiry: VISIBILITY_CHANGE_TIMEOUT,
+      updateUserActivity: true,
+    });
 
     if (!isSessionActive) {
       // If the user has come back to the page within VISIBILITY_CHANGE_TIMEOUT
@@ -809,7 +792,6 @@ export class Replay implements Integration {
    * Updates the session's last activity timestamp
    */
   updateLastActivity(lastActivity: number = new Date().getTime()) {
-    this.lastActivity = lastActivity;
     if (this.session) {
       this.session.lastActivity = lastActivity;
     }
@@ -889,8 +871,15 @@ export class Replay implements Integration {
    *
    * Returns true if session is not expired, false otherwise.
    */
-  checkAndHandleExpiredSession(expiry: number = SESSION_IDLE_DURATION) {
+  checkAndHandleExpiredSession({
+    expiry = SESSION_IDLE_DURATION,
+    updateUserActivity,
+  }: { expiry?: number; updateUserActivity?: boolean } = {}) {
     const oldSessionId = this.session?.id;
+
+    if (updateUserActivity) {
+      this.lastActivity = new Date().getTime();
+    }
 
     // Prevent starting a new session if the last user activity is older than
     // MAX_SESSION_LIFE. Otherwise non-user activity can trigger a new
