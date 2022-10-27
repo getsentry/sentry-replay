@@ -118,6 +118,14 @@ export class Replay implements Integration {
   private isEnabled = false;
 
   /**
+   *
+   * Paused is a state where:
+   * - DOM Recording is not listening at all
+   * - Nothing will be added to event buffer (e.g. core SDK events)
+   */
+  private isPaused = false;
+
+  /**
    * Have we attached listeners to the core SDK?
    * Note we have to track this as there is no way to remove instrumentation handlers.
    */
@@ -261,7 +269,7 @@ export class Replay implements Integration {
 
     // setup() is generally called on page load or manually - in both cases we
     // should treat it as an activity
-    this.updateLastActivity();
+    this.updateSessionActivity();
 
     this.eventBuffer = createEventBuffer({
       useCompression: Boolean(this.options.useCompression),
@@ -279,7 +287,7 @@ export class Replay implements Integration {
   }
 
   /**
-   * Start recording
+   * Start recording. Note that this will cause a new DOM checkout
    */
   startRecording() {
     this.stopRecording = record({
@@ -301,6 +309,23 @@ export class Replay implements Integration {
     this.stopRecording?.();
     this.eventBuffer?.destroy();
     this.eventBuffer = null;
+  }
+
+  /**
+   * Pause some replay functionality. See comments for `isPaused`.
+   * This differs from stop as this only stops DOM recording, it is
+   * not as thorough of a shutdown as `stop()`. */
+  pause() {
+    this.isPaused = true;
+    if (this.stopRecording) {
+      this.stopRecording();
+      this.stopRecording = undefined;
+    }
+  }
+
+  resume() {
+    this.isPaused = false;
+    this.startRecording();
   }
 
   clearSession() {
@@ -627,8 +652,8 @@ export class Replay implements Integration {
       if (type === 'history') {
         // Need to collect visited URLs
         this.context.urls.push(result.name);
-        this.checkAndHandleExpiredSession({ updateUserActivity: true });
-        this.updateLastActivity();
+        this.updateUserActivity();
+        this.triggerUserActivity();
       }
 
       this.addUpdate(() => {
@@ -663,8 +688,9 @@ export class Replay implements Integration {
       }
 
       if (result.category === 'ui.click') {
-        this.checkAndHandleExpiredSession({ updateUserActivity: true });
-        this.updateLastActivity();
+        this.triggerUserActivity();
+      } else {
+        this.checkAndHandleExpiredSession();
       }
 
       this.addUpdate(() => {
@@ -727,7 +753,6 @@ export class Replay implements Integration {
 
     const isSessionActive = this.checkAndHandleExpiredSession({
       expiry: VISIBILITY_CHANGE_TIMEOUT,
-      updateUserActivity: true,
     });
 
     if (!isSessionActive) {
@@ -741,8 +766,6 @@ export class Replay implements Integration {
     if (breadcrumb) {
       this.createCustomBreadcrumb(breadcrumb);
     }
-
-    this.updateLastActivity();
   }
 
   /**
@@ -760,6 +783,11 @@ export class Replay implements Integration {
   addEvent(event: RecordingEvent, isCheckout?: boolean) {
     if (!this.eventBuffer) {
       // This implies that `isEnabled` is false
+      return;
+    }
+
+    if (this.isPaused) {
+      // Do not add to event buffer when recording is paused
       return;
     }
 
@@ -788,13 +816,45 @@ export class Replay implements Integration {
 
     this.eventBuffer.addEvent(event, isCheckout);
   }
+
+  /**
+   * Update user activity (across session lifespans)
+   */
+  updateUserActivity(lastActivity: number = new Date().getTime()) {
+    this.lastActivity = lastActivity;
+  }
+
   /**
    * Updates the session's last activity timestamp
    */
-  updateLastActivity(lastActivity: number = new Date().getTime()) {
+  updateSessionActivity(lastActivity: number = new Date().getTime()) {
     if (this.session) {
       this.session.lastActivity = lastActivity;
     }
+  }
+
+  /**
+   * Updates the user activity timestamp and resumes recording. This should be called in an event handler for a user action that we consider as the user being "active" (e.g. a mouse click).
+   *
+   */
+  async triggerUserActivity() {
+    this.updateUserActivity();
+
+    // This case means that recording was once stopped due to inactivity.
+    // Ensure that recording is resumed.
+    if (!this.stopRecording) {
+      // Create a new session, otherwise when the user action is flushed, it will get rejected due to an expired session.
+      this.loadSession({ expiry: SESSION_IDLE_DURATION });
+
+      // Note: This will cause a new checkout
+      this.resume();
+      return;
+    }
+
+    // Otherwise... recording was never suspended, continue as normalish
+    this.checkAndHandleExpiredSession();
+
+    this.updateSessionActivity();
   }
 
   /**
@@ -867,41 +927,28 @@ export class Replay implements Integration {
   }
 
   /**
-   *
+   * Checks if recording should be stopped due to user inactivity. Otherwise
+   * check if session is expired and create a new session if so. Triggers a new
+   * full snapshot on new session.
    *
    * Returns true if session is not expired, false otherwise.
    */
   checkAndHandleExpiredSession({
     expiry = SESSION_IDLE_DURATION,
-    updateUserActivity,
-  }: { expiry?: number; updateUserActivity?: boolean } = {}) {
+  }: { expiry?: number } = {}) {
     const oldSessionId = this.session?.id;
-
-    if (updateUserActivity) {
-      this.lastActivity = new Date().getTime();
-    }
 
     // Prevent starting a new session if the last user activity is older than
     // MAX_SESSION_LIFE. Otherwise non-user activity can trigger a new
     // session+recording. This creates noisy replays that do not have much
     // content in them.
     if (this.lastActivity && isExpired(this.lastActivity, MAX_SESSION_LIFE)) {
-      // We should stop recording emitter if it exists
-      if (this.stopRecording) {
-        this.stopRecording();
-        this.stopRecording = undefined;
-      }
-
+      // Pause recording
+      this.pause();
       return;
     }
 
     // --- There is recent user activity --- //
-
-    // Ensure that recording is resumed
-    if (!this.stopRecording) {
-      this.startRecording();
-    }
-
     // This will create a new session if expired, based on expiry length
     this.loadSession({ expiry });
 

@@ -366,6 +366,7 @@ describe('Replay', () => {
     const breadcrumbTimestamp = newTimestamp + 20; // I don't know where this 20ms comes from
 
     expect(replay).toHaveSentReplay({
+      recordingPayloadHeader: { segment_id: 0 },
       events: JSON.stringify([
         { data: { isCheckout: true }, timestamp: newTimestamp, type: 2 },
         {
@@ -394,6 +395,7 @@ describe('Replay', () => {
   });
 
   it('does not record if user has been idle for more than MAX_SESSION_LIFE and only starts a new session after a user action', async () => {
+    jest.clearAllMocks();
     const initialSession = replay.session;
 
     expect(initialSession?.id).toBeDefined();
@@ -418,11 +420,25 @@ describe('Replay', () => {
       type: 3,
     };
     mockRecord._emitter(TEST_EVENT);
+    // performance events can still be collected while recording is stopped
+    // TODO: we may want to prevent `addEvent` from adding to buffer when user is inactive
+    replay.addUpdate(() => {
+      replay.createPerformanceSpans([
+        {
+          type: 'navigation.navigate',
+          name: 'foo',
+          start: BASE_TIMESTAMP + MAX_SESSION_LIFE,
+          end: BASE_TIMESTAMP + MAX_SESSION_LIFE + 100,
+        },
+      ]);
+      return true;
+    });
+
     window.dispatchEvent(new Event('blur'));
     await advanceTimers(5000);
 
-    expect(replay).not.toHaveSentReplay();
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
+    expect(replay).not.toHaveSentReplay();
     // Should be the same session because user has been idle and no events have caused a new session to be created
     expect(replay).toHaveSameSession(initialSession);
 
@@ -433,15 +449,32 @@ describe('Replay', () => {
     domHandler({
       name: 'click',
     });
+    // This should still be thrown away
+    mockRecord._emitter(TEST_EVENT);
+
+    const NEW_TEST_EVENT = {
+      data: { name: 'test' },
+      timestamp: BASE_TIMESTAMP + MAX_SESSION_LIFE + 5000 + 20,
+      type: 3,
+    };
+
+    mockRecord._emitter(NEW_TEST_EVENT);
 
     // new session is created
+    jest.runAllTimers();
+    await new Promise(process.nextTick);
+
     expect(replay).not.toHaveSameSession(initialSession);
     await advanceTimers(5000);
 
     const newTimestamp = BASE_TIMESTAMP + MAX_SESSION_LIFE + 5000 + 20; // I don't know where this 20ms comes from
     const breadcrumbTimestamp = newTimestamp;
 
+    jest.runAllTimers();
+    await new Promise(process.nextTick);
+
     expect(replay).toHaveSentReplay({
+      recordingPayloadHeader: { segment_id: 0 },
       events: JSON.stringify([
         { data: { isCheckout: true }, timestamp: newTimestamp, type: 2 },
         {
@@ -458,6 +491,7 @@ describe('Replay', () => {
             },
           },
         },
+        NEW_TEST_EVENT,
       ]),
     });
 
