@@ -287,7 +287,9 @@ export class Replay implements Integration {
   }
 
   /**
-   * Start recording. Note that this will cause a new DOM checkout
+   * Start recording.
+   *
+   * Note that this will cause a new DOM checkout
    */
   startRecording() {
     this.stopRecording = record({
@@ -323,6 +325,12 @@ export class Replay implements Integration {
     }
   }
 
+  /**
+   * Resumes recording, see notes for `pause().
+   *
+   * Note that calling `startRecording()` here will cause a
+   * new DOM checkout.`
+   */
   resume() {
     this.isPaused = false;
     this.startRecording();
@@ -846,7 +854,7 @@ export class Replay implements Integration {
       // Create a new session, otherwise when the user action is flushed, it will get rejected due to an expired session.
       this.loadSession({ expiry: SESSION_IDLE_DURATION });
 
-      // Note: This will cause a new checkout
+      // Note: This will cause a new DOM checkout
       this.resume();
       return;
     }
