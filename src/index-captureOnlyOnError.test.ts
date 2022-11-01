@@ -48,7 +48,6 @@ describe('Replay (capture only on error)', () => {
     jest
       .spyOn(SentryUtils, 'addInstrumentationHandler')
       .mockImplementation((type, handler: (args: any) => any) => {
-        console.log('mcok impl');
         if (type === 'dom') {
           domHandler = handler;
         }
@@ -124,7 +123,6 @@ describe('Replay (capture only on error)', () => {
 
     (global.fetch as jest.MockedFunction<typeof global.fetch>).mockClear();
     expect(replay).not.toHaveSentReplay();
-    console.log('before run all timers');
 
     jest.runAllTimers();
     await new Promise(process.nextTick);
@@ -322,9 +320,7 @@ describe('Replay (capture only on error)', () => {
     jest.runAllTimers();
     await new Promise(process.nextTick);
 
-    // console.log(+new Date());
     jest.advanceTimersByTime(5000);
-    // console.log(+new Date());
 
     captureException(new Error('testing'));
 
