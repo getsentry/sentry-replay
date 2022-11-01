@@ -16,6 +16,8 @@ import { EventType, record } from 'rrweb';
 import { getBreadcrumbHandler } from './coreHandlers/getBreadcrumbHandler';
 import { getSpanHandler } from './coreHandlers/getSpanHandler';
 import {
+  DEFAULT_ERROR_SAMPLE_RATE,
+  DEFAULT_SESSION_SAMPLE_RATE,
   MAX_SESSION_LIFE,
   REPLAY_EVENT_NAME,
   SESSION_IDLE_DURATION,
@@ -118,12 +120,17 @@ export class Replay implements Integration {
   private isEnabled = false;
 
   /**
-   *
    * Paused is a state where:
    * - DOM Recording is not listening at all
    * - Nothing will be added to event buffer (e.g. core SDK events)
    */
   private isPaused = false;
+
+  /**
+   * Integration will wait until an error occurs before creating and sending a
+   * replay.
+   */
+  private waitForError = false;
 
   /**
    * Have we attached listeners to the core SDK?
@@ -156,8 +163,8 @@ export class Replay implements Integration {
     initialFlushDelay = 5000,
     stickySession = true,
     useCompression = true,
-    captureOnlyOnError = false,
-    replaysSamplingRate = 1.0,
+    sessionSampleRate = DEFAULT_SESSION_SAMPLE_RATE,
+    errorSampleRate = DEFAULT_ERROR_SAMPLE_RATE,
     maskAllText = true,
     maskAllInputs = true,
     blockAllMedia = true,
@@ -165,6 +172,8 @@ export class Replay implements Integration {
     ignoreClass = 'sentry-ignore',
     maskTextClass = 'sentry-mask',
     blockSelector = '[data-sentry-block]',
+    replaysSamplingRate,
+    captureOnlyOnError,
     ...recordingOptions
   }: ReplayConfiguration = {}) {
     this.recordingOptions = {
@@ -176,22 +185,49 @@ export class Replay implements Integration {
       ...recordingOptions,
     };
 
+    const usingDeprecatedReplaysSamplingRate =
+      sessionSampleRate === undefined && replaysSamplingRate !== undefined;
+    const usingDeprecatedCaptureOnlyOnError =
+      errorSampleRate === undefined && captureOnlyOnError !== undefined;
+
     this.options = {
       flushMinDelay,
       flushMaxDelay,
       stickySession,
       initialFlushDelay,
-      captureOnlyOnError,
-      replaysSamplingRate,
+      sessionSampleRate: usingDeprecatedReplaysSamplingRate
+        ? replaysSamplingRate
+        : sessionSampleRate,
+      errorSampleRate: usingDeprecatedCaptureOnlyOnError
+        ? errorSampleRate
+        : errorSampleRate,
       useCompression,
       maskAllText,
       blockAllMedia,
     };
 
-    // Modify rrweb options to checkoutEveryNthSecond if this is defined, as we don't know when an error occurs, so we want to try to minimize the number of events captured.
-    if (this.options.captureOnlyOnError) {
+    // Modify recording options to checkoutEveryNthSecond if this is defined, as we
+    // don't know when an error will occur, so we need to keep a buffer of replay events.
+    if (
+      this.options.errorSampleRate > 0 &&
+      this.options.sessionSampleRate < 1.0
+    ) {
       // Checkout every minute, meaning we only get up-to one minute of events before the error happens
       this.recordingOptions.checkoutEveryNms = 60000;
+      this.waitForError = true;
+    }
+
+    // TODO(deprecated): Maintain backwards compatibility for alpha users
+    if (usingDeprecatedCaptureOnlyOnError) {
+      console.warn(
+        '[@sentry/replay]: The `captureOnlyOnError` option is deprecated! Please configure `errorSampleRate` instead.'
+      );
+    }
+
+    if (usingDeprecatedReplaysSamplingRate) {
+      console.warn(
+        '[@sentry/replay]: The `replaysSamplingRate` option is deprecated! Please configure `sessionSampleRate` instead.'
+      );
     }
 
     if (this.options.maskAllText) {
@@ -350,7 +386,8 @@ export class Replay implements Integration {
       expiry,
       stickySession: Boolean(this.options.stickySession),
       currentSession: this.session,
-      samplingRate: this.options.replaysSamplingRate,
+      sessionSampleRate: this.options.sessionSampleRate,
+      errorSampleRate: this.options.errorSampleRate,
     });
 
     // If session was newly created (i.e. was not loaded from storage), then
@@ -475,12 +512,12 @@ export class Replay implements Integration {
    * processing and hand back control to caller.
    */
   addUpdate(cb?: AddUpdateCallback) {
-    // We need to always run `cb` (e.g. in the case of captureOnlyOnError == true)
+    // We need to always run `cb` (e.g. in the case of `this.waitForError == true`)
     const cbResult = cb?.();
 
     // If this option is turned on then we will only want to call `flush`
     // explicitly
-    if (this.options.captureOnlyOnError) {
+    if (this.waitForError) {
       return;
     }
 
@@ -532,13 +569,22 @@ export class Replay implements Integration {
 
     // Need to be very careful that this does not cause an infinite loop
     if (
-      this.options.captureOnlyOnError &&
+      this.waitForError &&
       event.exception &&
       event.message !== UNABLE_TO_SEND_REPLAY // ignore this error because other we could loop indefinitely with trying to capture replay and failing
     ) {
-      // TODO: Do we continue to record after?
-      // TODO: What happens if another error happens? Do we record in the same session?
-      setTimeout(() => this.flushImmediate());
+      setTimeout(async () => {
+        await this.flushImmediate();
+
+        if (this.stopRecording) {
+          this.stopRecording();
+          // Reset all "capture on error" configuration before
+          // starting a new recording
+          delete this.recordingOptions.checkoutEveryNms;
+          this.waitForError = false;
+          this.startRecording();
+        }
+      });
     }
 
     return event;
@@ -979,10 +1025,10 @@ export class Replay implements Integration {
   }
 
   /**
-   * Only flush if `captureOnlyOnError` is false.
+   * Only flush if `this.waitForError` is false.
    */
   conditionalFlush() {
-    if (this.options.captureOnlyOnError) {
+    if (this.waitForError) {
       return;
     }
 
@@ -1130,7 +1176,7 @@ export class Replay implements Integration {
   flushImmediate() {
     this.debouncedFlush();
     // `.flush` is provided by lodash.debounce
-    this.debouncedFlush.flush();
+    return this.debouncedFlush.flush();
   }
 
   /**
