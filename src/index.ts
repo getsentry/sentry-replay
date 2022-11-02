@@ -358,16 +358,6 @@ export class Replay implements Integration {
     if (type === 'new') {
       this.newSessionCreated = true;
       this.setInitialState();
-    } else {
-      // NOTE: This shouldn't happen
-      if (session.segmentId === 0) {
-        addInternalBreadcrumb({
-          message: `previous session: ${
-            this.session ? this.session.toJSON() : 'null'
-          }
-current session: ${session.toJSON()}`,
-        });
-      }
     }
 
     if (session.id !== this.session?.id) {
