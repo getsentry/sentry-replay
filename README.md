@@ -42,6 +42,15 @@ Sentry.init({
 });
 ```
 
+### Identifying Users
+
+If you have only followed the above instructions to setup session replays, you will only see IP addresses in Sentry's UI. In order to associate a user identity to a session replay, use [`setUser`](https://docs.sentry.io/platforms/javascript/enriching-events/identify-user/).
+
+```javascript
+import * as Sentry from "@sentry/browser";
+Sentry.setUser({ email: "jane.doe@example.com" });
+```
+
 ### Start and Stop Recording
 
 Replay recording only starts automatically when it is included in the `integrations` key when calling `Sentry.init`. Otherwise you can initialize the plugin and manually call the `start()` method on the integration instance. To stop recording you can call the `stop()`.
