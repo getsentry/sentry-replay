@@ -36,6 +36,14 @@ Sentry.init({
       // This sets the sample rate to be 10%. You may want this to be 100% while
       // in development and sample at a lower rate in production
       replaysSamplingRate: 0.1,
+
+      // By default, mask all text content with asterisks (*). Passes text
+      // content through to `maskTextFn` before sending to server.
+      maskAllText: true,
+
+      // By default, block all media elements (img, svg, video, object,
+      // picture, embed, map, audio)
+      blockAllMedia: true,
     })
   ],
   // ...
