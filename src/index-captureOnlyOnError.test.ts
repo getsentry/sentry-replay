@@ -88,7 +88,7 @@ describe('Replay (capture only on error)', () => {
     expect(mockRecord.takeFullSnapshot).not.toHaveBeenCalled();
     expect(replay).not.toHaveSentReplay();
 
-    // Don't not capture mouse click
+    // Does not capture mouse click
     domHandler({
       name: 'click',
     });
