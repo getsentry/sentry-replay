@@ -358,6 +358,16 @@ export class Replay implements Integration {
     if (type === 'new') {
       this.newSessionCreated = true;
       this.setInitialState();
+    } else {
+      // NOTE: This shouldn't happen
+      if (session.segmentId === 0) {
+        addInternalBreadcrumb({
+          message: `previous session: ${
+            this.session ? this.session.toJSON() : 'null'
+          }
+current session: ${session.toJSON()}`,
+        });
+      }
     }
 
     if (session.id !== this.session?.id) {
@@ -815,7 +825,7 @@ export class Replay implements Integration {
     // Only record earliest event if a new session was created, otherwise it
     // shouldn't be relevant
     if (
-      this.newSessionCreated &&
+      (this.newSessionCreated || this.session?.segmentId === 0) &&
       (!this.context.earliestEvent ||
         timestampInMs < this.context.earliestEvent)
     ) {
@@ -1061,7 +1071,7 @@ export class Replay implements Integration {
         replayId,
         events: recordingData,
         segmentId,
-        includeReplayStartTimestamp: newSessionCreated,
+        includeReplayStartTimestamp: newSessionCreated || segmentId === 0,
       });
       this.newSessionCreated = false;
     } catch (err) {
