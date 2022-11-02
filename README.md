@@ -37,13 +37,17 @@ Sentry.init({
       // in development and sample at a lower rate in production
       replaysSamplingRate: 0.1,
 
-      // By default, mask all text content with asterisks (*). Passes text
+      // Mask all text content with asterisks (*). Passes text
       // content through to `maskTextFn` before sending to server.
-      maskAllText: true,
+      //
+      // Defaults to true, uncomment to change
+      // maskAllText: true,
 
-      // By default, block all media elements (img, svg, video, object,
+      // Block all media elements (img, svg, video, object,
       // picture, embed, map, audio)
-      blockAllMedia: true,
+      //
+      // Defaults to true, uncomment to change
+      // blockAllMedia: true,
     })
   ],
   // ...
