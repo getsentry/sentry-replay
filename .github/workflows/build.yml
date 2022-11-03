@@ -27,13 +27,17 @@ jobs:
           yarn install --frozen-lockfile
 
       - run: |
-          yarn test
+          yarn test:ci
 
       - run: |
           yarn pack
+
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@v3
 
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ github.sha }}
           path: |
             ${{ github.workspace }}/*.tgz
+

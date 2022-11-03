@@ -20,7 +20,8 @@
     "prepare": "husky install",
     "prepack": "yarn build:prod",
     "start:demo": "yarn build:dev && cd demo && yarn start",
-    "test": "yarn jest"
+    "test": "yarn jest --watch",
+    "test:ci": "yarn jest --runInBand --coverage"
   },
   "files": [
     "dist"
