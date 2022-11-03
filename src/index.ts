@@ -571,7 +571,7 @@ export class Replay implements Integration {
     if (
       this.waitForError &&
       event.exception &&
-      event.message !== UNABLE_TO_SEND_REPLAY // ignore this error because other we could loop indefinitely with trying to capture replay and failing
+      event.message !== UNABLE_TO_SEND_REPLAY // ignore this error because otherwise we could loop indefinitely with trying to capture replay and failing
     ) {
       setTimeout(async () => {
         await this.flushImmediate();
