@@ -40,10 +40,31 @@ Sentry.init({
       // If the entire session is not sampled, use the below sample rate to sample
       //sessions when an error occurs.
       errorSampleRate: 1.0,
+
+      // Mask all text content with asterisks (*). Passes text
+      // content through to `maskTextFn` before sending to server.
+      //
+      // Defaults to true, uncomment to change
+      // maskAllText: true,
+
+      // Block all media elements (img, svg, video, object,
+      // picture, embed, map, audio)
+      //
+      // Defaults to true, uncomment to change
+      // blockAllMedia: true,
     })
   ],
   // ...
 });
+```
+
+### Identifying Users
+
+If you have only followed the above instructions to setup session replays, you will only see IP addresses in Sentry's UI. In order to associate a user identity to a session replay, use [`setUser`](https://docs.sentry.io/platforms/javascript/enriching-events/identify-user/).
+
+```javascript
+import * as Sentry from "@sentry/browser";
+Sentry.setUser({ email: "jane.doe@example.com" });
 ```
 
 ### Start and Stop Recording
