@@ -199,7 +199,7 @@ export class Replay implements Integration {
         ? replaysSamplingRate
         : sessionSampleRate,
       errorSampleRate: usingDeprecatedCaptureOnlyOnError
-        ? errorSampleRate
+        ? 1.0
         : errorSampleRate,
       useCompression,
       maskAllText,
