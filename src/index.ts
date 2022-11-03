@@ -186,9 +186,8 @@ export class Replay implements Integration {
     };
 
     const usingDeprecatedReplaysSamplingRate =
-      sessionSampleRate === undefined && replaysSamplingRate !== undefined;
-    const usingDeprecatedCaptureOnlyOnError =
-      errorSampleRate === undefined && captureOnlyOnError !== undefined;
+      replaysSamplingRate !== undefined;
+    const usingDeprecatedCaptureOnlyOnError = captureOnlyOnError !== undefined;
 
     this.options = {
       flushMinDelay,
