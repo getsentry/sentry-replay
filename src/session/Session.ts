@@ -94,13 +94,6 @@ export class Session {
     return this._started;
   }
 
-  set started(newDate: number) {
-    this._started = newDate;
-    if (this.options.stickySession) {
-      saveSession(this);
-    }
-  }
-
   get lastActivity() {
     return this._lastActivity;
   }
