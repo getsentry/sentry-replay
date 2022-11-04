@@ -43,7 +43,7 @@ async function getMockReplay(options: ReplayConfiguration = {}) {
   return replay;
 }
 
-describe('Replay (capture only on error)', () => {
+describe('Replay (errorSampleRate)', () => {
   let replay: Replay;
   let mockRecord: RecordMock;
   let domHandler: (args: any) => any;
