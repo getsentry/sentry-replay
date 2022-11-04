@@ -38,7 +38,7 @@ Sentry.init({
       sessionSampleRate: 0.1,
 
       // If the entire session is not sampled, use the below sample rate to sample
-      //sessions when an error occurs.
+      // sessions when an error occurs.
       errorSampleRate: 1.0,
 
       // Mask all text content with asterisks (*). Passes text
