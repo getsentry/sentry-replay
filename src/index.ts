@@ -1215,18 +1215,20 @@ export class Replay implements Integration {
       ]
     );
 
+    const serializedEnvelope = serializeEnvelope(envelope);
+
     // If sendBeacon is supported and payload is smol enough...
-    if (supportsSendBeacon() && events.length <= 65536) {
+    if (supportsSendBeacon() && serializedEnvelope.length <= 60000) {
       logger.log(`uploading attachment via sendBeacon()`);
-      window.navigator.sendBeacon(endpoint, serializeEnvelope(envelope));
+      window.navigator.sendBeacon(endpoint, serializedEnvelope);
       return;
     }
 
-    // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
+    // Otherwise use `fetch`, which *CAN* be cancelled on page reloads/unloads
     logger.log(`uploading attachment via fetch()`);
     const response = await fetch(endpoint, {
       method: 'POST',
-      body: serializeEnvelope(envelope),
+      body: serializedEnvelope,
     });
 
     if (response.status !== 200) {
