@@ -600,6 +600,15 @@ export class Replay implements Integration {
     }
 
     this.addUpdate(() => {
+      // The session is always started immediately on pageload/init, but for
+      // error-only replays, it should reflect the most recent checkout
+      // when an error occurs. Clear any state that happens before this current
+      // checkout. This needs to happen before `addEvent()` that updates state
+      // dependent on this reset.
+      if (this.waitForError && event.type === 2) {
+        this.setInitialState();
+      }
+
       // We need to clear existing events on a checkout, otherwise they are
       // incremental event updates and should be appended
       this.addEvent(event, isCheckout);
@@ -620,11 +629,8 @@ export class Replay implements Integration {
         return true;
       }
 
-      // The session is always started immediately on pageload/init, but for
-      // error-only replays, it should be started with the most recent checkout
-      // when an error occurs. Update the session start timestamp to reflect
-      // this. Otherwise there could be lots of empty time between pageload and
-      // when an error occurs.
+      // See note above re: session start needs to reflect the most recent
+      // checkout.
       if (this.waitForError && this.session && this.context.earliestEvent) {
         this.session.started = this.context.earliestEvent;
       }
