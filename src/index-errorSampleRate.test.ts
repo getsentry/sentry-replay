@@ -28,7 +28,7 @@ async function advanceTimers(time: number) {
   await new Promise(process.nextTick);
 }
 
-describe('Replay (capture only on error)', () => {
+describe('Replay (errorSampleRate)', () => {
   let replay: Replay;
   let mockRecord: RecordMock;
   let domHandler: (args: any) => any;
