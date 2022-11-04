@@ -85,9 +85,8 @@ replay.stop(); // Stop recording
 
 | key                 | type    | default | description                                                                                                                                                                                                                     |
 | ------------------- | ------- | ------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------   |
-| initialFlushDelay   | number  | `5000`  | The amount of time to wait (in ms) before sending the initial recording payload. This helps drop recordings where users visit and close the page quickly.                                                                       |
-| sessionSampleRate   | number  | `0.1`   | The sample rate for session-long replays. (1.0 will collect all replays, 0 will collect no replays).                                                                                                                            |
-| errorSampleRate     | number  | `1.0`   | The sample rate for sessions that have had an error occur. Note the sampling is applied after not being sampled by `sessionSampleRate` and *BEFORE* an error occurs. (1.0 will collect all replays, 0 will collect no replays). |
+| sessionSampleRate   | number  | `0.1`   | The sample rate for all sessions, which will capture the entirety from when a user begins a session until the session ends. (1.0 will collect all replays, 0 will collect no replays)                                           |
+| errorSampleRate     | number  | `1.0`   | If a session isn't already being recorded via `sessionSampleRate`, based on `errorSampleRate` the SDK will send the captured replay when an error occurs. (1.0 capturing all sessions with an error, and 0 capturing none).     |
 | stickySession       | boolean | `true`  | Keep track of the user across page loads. Note a single user using multiple tabs will result in multiple sessions. Closing a tab will result in the session being closed as well.                                               |
 
 ### Privacy Configuration
