@@ -1,6 +1,6 @@
 # sentry-replay
 
-Note: Session Replay is currently in alpha.
+Note: Session Replay is currently in closed beta.
 
 ## Pre-requisites
 
