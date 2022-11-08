@@ -1310,7 +1310,7 @@ export class Replay implements Integration {
       setContext('Replays', {
         retryCount: this.retryCount,
       });
-      captureInternalException(new Error(UNABLE_TO_SEND_REPLAY));
+      captureInternalException(ex);
 
       // If an error happened here, it's likely that uploading the attachment
       // failed, we'll can retry with the same events payload
