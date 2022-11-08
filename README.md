@@ -1,6 +1,6 @@
 # sentry-replay
 
-Note: Session Replay is currently in beta.
+Note: Session Replay is currently in alpha.
 
 ## Pre-requisites
 
@@ -78,6 +78,26 @@ replay.start(); // Start recording
 
 replay.stop(); // Stop recording
 ```
+
+## Sessions
+
+A session starts when the Session Replay SDK is first loaded and initialized. The session will continue as long as the user is actively interacting [1] with the application *OR* until a maximum of 30 minutes have elapsed. Closing the browser tab will end the session immediately.
+
+[1] - An interaction currently means either a mouse click or a browser navigation event.
+
+### Replay Captures Only on Errors
+
+Alternatively, rather than recording an entire session, you can capture a replay only when an error occurs. In this case, the integration will buffer up to a minutes worth of events prior to the error being thrown. It will continue to record the session following the rules above regarding session life and activity. Read the [sampling](#Sampling) section for configuration options. 
+
+## Sampling
+
+Sampling allows you to control how much of your website's traffic will result in a Session Replay. There are two sample rates you can adjust to get the replays more relevant to your interests:
+
+- `sessionSampleRate` - The sample rate for replays that begin recording immediately and last the entirety of the user's session.
+- `errorSampleRate` - The sample rate for replays that are recorded when an error happens. This type of replay will record up to a minute of events prior to the error and continue recording until the session ends.
+
+Sampling occurs when the session is first started. `sessionSampleRate` is evaluated first. If it is sampled, then the replay recording begins. Otherwise, `errorSampleRate` is evaluated and if it is sampled, the integration will begin buffering the replay and will only upload a replay to Sentry when an error occurs. The remainder of the replay will behave similarly to a whole-session replay.
+
 
 ## Configuration
 
