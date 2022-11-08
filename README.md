@@ -81,9 +81,9 @@ replay.stop(); // Stop recording
 
 ## Sessions
 
-A session starts when the Session Replay SDK is first loaded and initialized. The session will continue as long as the user is actively interacting [^1] with the application *OR* until a maximum of 30 minutes have elapsed. Closing the browser tab will end the session immediately.
+A session starts when the Session Replay SDK is first loaded and initialized. The session will continue as long as the user is actively interacting[^1] with the application *OR* until a maximum of 30 minutes have elapsed. Closing the browser tab will end the session immediately.
 
-[^1] - An interaction currently means either a mouse click or a browser navigation event.
+[^1]: An interaction currently means either a mouse click or a browser navigation event.
 
 ### Replay Captures Only on Errors
 
