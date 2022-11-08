@@ -81,7 +81,7 @@ replay.stop(); // Stop recording
 
 ## Sessions
 
-A session starts when the Session Replay SDK is first loaded and initialized. The session will continue as long as the user is actively interacting[^1] with the application *OR* until a maximum of 30 minutes have elapsed. Closing the browser tab will end the session immediately according to the rules for [SessionStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage).
+A session starts when the Session Replay SDK is first loaded and initialized. The session will continue until 5 minutes passes without any user interactions[^1] with the application *OR* until a maximum of 30 minutes have elapsed. Closing the browser tab will end the session immediately according to the rules for [SessionStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage).
 
 [^1]: An 'interaction' refers to either a mouse click or a browser navigation event.
 
