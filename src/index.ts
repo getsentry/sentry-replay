@@ -603,7 +603,7 @@ export class Replay implements Integration {
       // The session is always started immediately on pageload/init, but for
       // error-only replays, it should reflect the most recent checkout
       // when an error occurs. Clear any state that happens before this current
-      // checkout. This needs to happen before `addEvent()` that updates state
+      // checkout. This needs to happen before `addEvent()` which updates state
       // dependent on this reset.
       if (this.waitForError && event.type === 2) {
         this.setInitialState();
