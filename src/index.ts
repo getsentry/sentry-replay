@@ -59,7 +59,11 @@ const UNABLE_TO_SEND_REPLAY = 'Unable to send Replay';
 const MEDIA_SELECTORS =
   'img,image,svg,path,rect,area,video,object,picture,embed,map,audio';
 
-let _initialized = false;
+/**
+ * Flag to track if listeners are attached to the core SDK. Necessary as there
+ * is no way to remove the listeners, so it needs to be attached only one time.
+ */
+let _coreListenersAttached = false;
 
 const isBrowser = typeof window !== 'undefined';
 
@@ -118,12 +122,6 @@ export class Replay implements Integration {
    * replay.
    */
   private waitForError = false;
-
-  /**
-   * Have we attached listeners to the core SDK?
-   * Note we have to track this as there is no way to remove instrumentation handlers.
-   */
-  private hasInitializedCoreListeners = false;
 
   /**
    * Function to stop recording
@@ -227,15 +225,6 @@ export class Replay implements Integration {
         maxWait: this.options.flushMaxDelay,
       }
     );
-
-    if (isBrowser && _initialized) {
-      const error = new Error(
-        'Multiple Sentry Session Replay instances are not supported'
-      );
-      captureInternalException(error);
-      throw error;
-    }
-    _initialized = true;
   }
 
   /**
@@ -261,7 +250,10 @@ export class Replay implements Integration {
    * Creates or loads a session, attaches listeners to varying events (DOM, PerformanceObserver, Recording, Sentry SDK, etc)
    */
   start() {
-    if (!isBrowser) {
+    // Should not need to do anything if:
+    // - it is in a browser environment
+    // - integration is already running
+    if (!isBrowser || this.isEnabled) {
       return;
     }
 
@@ -290,7 +282,7 @@ export class Replay implements Integration {
       this.waitForError = true;
     }
 
-    // setup() is generally called on page load or manually - in both cases we
+    // start() is generally called on page load or manually - in both cases we
     // should treat it as an activity
     this.updateSessionActivity();
 
@@ -335,7 +327,8 @@ export class Replay implements Integration {
   /**
    * Pause some replay functionality. See comments for `isPaused`.
    * This differs from stop as this only stops DOM recording, it is
-   * not as thorough of a shutdown as `stop()`. */
+   * not as thorough of a shutdown as `stop()`.
+   */
   pause() {
     this.isPaused = true;
     if (this.stopRecording) {
@@ -416,7 +409,7 @@ export class Replay implements Integration {
     window.addEventListener('focus', this.handleWindowFocus);
 
     // There is no way to remove these listeners, so ensure they are only added once
-    if (!this.hasInitializedCoreListeners) {
+    if (!_coreListenersAttached) {
       // Listeners from core SDK //
       const scope = getCurrentHub().getScope();
       scope?.addScopeListener(this.handleCoreBreadcrumbListener('scope'));
@@ -435,7 +428,7 @@ export class Replay implements Integration {
       // replay ID so that we can reference them later in the UI
       addGlobalEventProcessor(this.handleGlobalEvent);
 
-      this.hasInitializedCoreListeners = true;
+      _coreListenersAttached = true;
     }
 
     // PerformanceObserver //

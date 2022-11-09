@@ -12,7 +12,7 @@ interface MockSdkParams {
   sentryOptions?: BrowserOptions;
 }
 
-class MockTransport implements Transport {
+export class MockTransport implements Transport {
   send = jest.fn(async () => {
     return;
   });
@@ -56,5 +56,5 @@ export async function mockSdk({
 
   init({ ...sentryOptions, integrations: [replay] });
 
-  return { replay };
+  return { replay, Replay };
 }
