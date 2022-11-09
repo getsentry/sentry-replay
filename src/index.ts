@@ -1244,7 +1244,11 @@ export class Replay implements Integration {
     );
 
     const client = getCurrentHub().getClient();
-    return client?.getTransport()?.send(envelope);
+    try {
+      return client?.getTransport()?.send(envelope);
+    } catch {
+      throw new Error(UNABLE_TO_SEND_REPLAY);
+    }
   }
 
   resetRetries() {
