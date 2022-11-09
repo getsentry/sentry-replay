@@ -1,15 +1,6 @@
-import {
-  addGlobalEventProcessor,
-  getCurrentHub,
-  getEnvelopeEndpointWithUrlEncodedAuth,
-  setContext,
-} from '@sentry/core';
+import { addGlobalEventProcessor, getCurrentHub } from '@sentry/core';
 import { Breadcrumb, Event, Integration } from '@sentry/types';
-import {
-  addInstrumentationHandler,
-  createEnvelope,
-  serializeEnvelope,
-} from '@sentry/utils';
+import { addInstrumentationHandler, createEnvelope } from '@sentry/utils';
 import debounce from 'lodash.debounce';
 import { EventType, record } from 'rrweb';
 
@@ -45,13 +36,12 @@ import type {
   InitialState,
   InstrumentationTypeBreadcrumb,
   InstrumentationTypeSpan,
-  RecordedEvents,
   RecordingEvent,
   RecordingOptions,
   ReplayConfiguration,
   ReplayEventContext,
   ReplayPluginOptions,
-  SendReplayRequest,
+  SendReplay,
 } from './types';
 
 /**
@@ -59,8 +49,6 @@ import type {
  */
 type AddUpdateCallback = () => boolean | void;
 
-const BASE_RETRY_INTERVAL = 5000;
-const MAX_RETRY_COUNT = 3;
 const UNABLE_TO_SEND_REPLAY = 'Unable to send Replay';
 const MEDIA_SELECTORS =
   'img,image,svg,path,rect,area,video,object,picture,embed,map,audio';
@@ -95,9 +83,6 @@ export class Replay implements Integration {
   readonly options: ReplayPluginOptions;
 
   private performanceObserver: PerformanceObserver | null = null;
-
-  private retryCount = 0;
-  private retryInterval = BASE_RETRY_INTERVAL;
 
   private debouncedFlush: ReturnType<typeof debounce>;
   private flushLock: Promise<unknown> | null = null;
@@ -1170,15 +1155,19 @@ export class Replay implements Integration {
   }
 
   /**
-   * Send replay attachment using `fetch()`
+   * Finalize and send the current replay event to Sentry
    */
-  async sendReplayRequest({
-    endpoint,
-    events,
+  async sendReplay({
     replayId: event_id,
+    events,
     segmentId: segment_id,
     includeReplayStartTimestamp,
-  }: SendReplayRequest) {
+  }: SendReplay) {
+    // short circuit if there's no events to upload
+    if (!events.length) {
+      return;
+    }
+
     const payloadWithSequence = createPayload({
       events,
       headers: {
@@ -1250,93 +1239,7 @@ export class Replay implements Integration {
       ]
     );
 
-    // Otherwise use `fetch`, which *WILL* get cancelled on page reloads/unloads
-    logger.log(`uploading attachment via fetch()`);
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      body: serializeEnvelope(envelope),
-    });
-
-    if (response.status !== 200) {
-      setContext('Send Replay Response', {
-        status: response.status,
-        body: await response.text(),
-      });
-      throw new Error(UNABLE_TO_SEND_REPLAY);
-    }
-  }
-
-  resetRetries() {
-    this.retryCount = 0;
-    this.retryInterval = BASE_RETRY_INTERVAL;
-  }
-
-  /**
-   * Finalize and send the current replay event to Sentry
-   */
-  async sendReplay({
-    replayId,
-    events,
-    segmentId,
-    includeReplayStartTimestamp,
-  }: {
-    replayId: string;
-    events: RecordedEvents;
-    segmentId: number;
-    includeReplayStartTimestamp: boolean;
-  }) {
-    // short circuit if there's no events to upload
-    if (!events.length) {
-      return;
-    }
-
     const client = getCurrentHub().getClient();
-    // @ts-expect-error: Type 'undefined' is not assignable to type 'DsnComponents'.ts(2345)
-    const endpoint = getEnvelopeEndpointWithUrlEncodedAuth(client.getDsn());
-
-    try {
-      await this.sendReplayRequest({
-        endpoint,
-        events,
-        replayId,
-        segmentId,
-        includeReplayStartTimestamp,
-      });
-      this.resetRetries();
-      return true;
-    } catch (ex) {
-      console.error(ex);
-      // Capture error for every failed replay
-      setContext('Replays', {
-        retryCount: this.retryCount,
-      });
-      captureInternalException(ex);
-
-      // If an error happened here, it's likely that uploading the attachment
-      // failed, we'll can retry with the same events payload
-      if (this.retryCount >= MAX_RETRY_COUNT) {
-        throw new Error(`${UNABLE_TO_SEND_REPLAY} - max retries exceeded`);
-      }
-
-      this.retryCount = this.retryCount + 1;
-      // will retry in intervals of 5, 10, 30
-      this.retryInterval = this.retryCount * this.retryInterval;
-
-      return await new Promise((resolve, reject) => {
-        setTimeout(async () => {
-          try {
-            await this.sendReplay({
-              replayId,
-              events,
-              segmentId,
-              includeReplayStartTimestamp,
-            });
-            resolve(true);
-          } catch (err) {
-            reject(err);
-          }
-        }, this.retryInterval);
-      });
-    }
+    return client?.getTransport()?.send(envelope);
   }
 }
