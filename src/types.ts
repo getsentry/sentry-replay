@@ -11,8 +11,8 @@ export type AllPerformanceEntry =
   | PerformanceNavigationTiming;
 
 export interface SendReplay {
-  replayId: string;
   events: RecordedEvents;
+  replayId: string;
   segmentId: number;
   includeReplayStartTimestamp: boolean;
 }
