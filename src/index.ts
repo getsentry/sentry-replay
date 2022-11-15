@@ -236,13 +236,14 @@ export class Replay implements Integration {
   }
 
   /**
-   * Because we create a transaction in `setupOnce`, we can potentially create a
-   * transaction before some native SDK integrations have run and applied their
-   * own global event processor. An example is:
+   * We previously used to create a transaction in `setupOnce` and it would
+   * potentially create a transaction before some native SDK integrations have run
+   * and applied their own global event processor. An example is:
    * https://github.com/getsentry/sentry-javascript/blob/b47ceafbdac7f8b99093ce6023726ad4687edc48/packages/browser/src/integrations/useragent.ts
    *
-   * So we call `this.setup` in next event loop as a workaround to wait for
-   * other global event processors to finish
+   * So we call `this.setup` in next event loop as a workaround to wait for other
+   * global event processors to finish. This is no longer needed, but keeping it
+   * here to avoid any future issues.
    */
   setupOnce() {
     if (!isBrowser) {
@@ -255,7 +256,8 @@ export class Replay implements Integration {
   /**
    * Initializes the plugin.
    *
-   * Creates or loads a session, attaches listeners to varying events (DOM, PerformanceObserver, Recording, Sentry SDK, etc)
+   * Creates or loads a session, attaches listeners to varying events (DOM,
+   * PerformanceObserver, Recording, Sentry SDK, etc)
    */
   start() {
     if (!isBrowser) {
@@ -315,7 +317,8 @@ export class Replay implements Integration {
   }
 
   /**
-   * Currently, this needs to be manually called (e.g. for tests). Sentry SDK does not support a teardown
+   * Currently, this needs to be manually called (e.g. for tests). Sentry SDK
+   * does not support a teardown
    */
   stop() {
     if (!isBrowser) {
@@ -693,7 +696,6 @@ export class Replay implements Integration {
    * Handler for Sentry Core SDK events.
    *
    * These specific events will create span-like objects in the recording.
-   *
    */
   handleCoreSpanListener =
     (type: InstrumentationTypeSpan) => (handlerData: any) => {
@@ -711,7 +713,6 @@ export class Replay implements Integration {
       if (type === 'history') {
         // Need to collect visited URLs
         this.context.urls.push(result.name);
-        this.updateUserActivity();
         this.triggerUserActivity();
       }
 
@@ -893,8 +894,9 @@ export class Replay implements Integration {
   }
 
   /**
-   * Updates the user activity timestamp and resumes recording. This should be called in an event handler for a user action that we consider as the user being "active" (e.g. a mouse click).
-   *
+   * Updates the user activity timestamp and resumes recording. This should be
+   * called in an event handler for a user action that we consider as the user
+   * being "active" (e.g. a mouse click).
    */
   async triggerUserActivity() {
     this.updateUserActivity();
@@ -902,7 +904,8 @@ export class Replay implements Integration {
     // This case means that recording was once stopped due to inactivity.
     // Ensure that recording is resumed.
     if (!this.stopRecording) {
-      // Create a new session, otherwise when the user action is flushed, it will get rejected due to an expired session.
+      // Create a new session, otherwise when the user action is flushed, it
+      // will get rejected due to an expired session.
       this.loadSession({ expiry: SESSION_IDLE_DURATION });
 
       // Note: This will cause a new DOM checkout
@@ -1018,12 +1021,7 @@ export class Replay implements Integration {
       return true;
     }
 
-    // TODO: We could potentially figure out a way to save the last session,
-    // and produce a checkout based on a previous checkout + updates, and then
-    // replay the event on top. Or maybe replay the event on top of a refresh
-    // snapshot.
-
-    // For now create a new snapshot
+    // Session is expired, trigger a full snapshot (which will create a new session)
     this.triggerFullSnapshot();
 
     return false;
@@ -1098,16 +1096,17 @@ export class Replay implements Integration {
     // Only attach memory event if eventBuffer is not empty
     await this.addMemoryEntry();
 
-    // NOTE: Copy values from instance members, as it's possible they could
-    // change before the flush finishes.
-    const replayId = this.session.id;
-    // Always increment segmentId regardless of outcome of sending replay
-    const segmentId = this.session.segmentId++;
-    const recordingData = await this.eventBuffer.finish();
-    const eventContext = this.popEventContext();
-
     try {
       // Note this empties the event buffer regardless of outcome of sending replay
+      const recordingData = await this.eventBuffer.finish();
+
+      // NOTE: Copy values from instance members, as it's possible they could
+      // change before the flush finishes.
+      const replayId = this.session.id;
+      const eventContext = this.popEventContext();
+      // Always increment segmentId regardless of outcome of sending replay
+      const segmentId = this.session.segmentId++;
+
       await this.sendReplay({
         replayId,
         events: recordingData,
