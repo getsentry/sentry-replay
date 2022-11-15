@@ -85,7 +85,7 @@ describe('Replay', () => {
     jest.clearAllMocks();
     mockSendReplayRequest.mockRestore();
     mockRecord.takeFullSnapshot.mockClear();
-    replay && replay.stop();
+    replay.stop();
   });
 
   it('calls rrweb.record with custom options', async () => {
