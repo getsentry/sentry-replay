@@ -716,7 +716,6 @@ export class Replay implements Integration {
       if (type === 'history') {
         // Need to collect visited URLs
         this.context.urls.push(result.name);
-        this.updateUserActivity();
         this.triggerUserActivity();
       }
 
