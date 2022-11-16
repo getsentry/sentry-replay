@@ -5,7 +5,7 @@ import { resetSdkMock } from '@test/mocks';
 import { REPLAY_EVENT_NAME } from './session/constants';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+jest.useFakeTimers();
 
 let replay: Replay;
 

@@ -5,7 +5,7 @@ import { SESSION_IDLE_DURATION } from './session/constants';
 import { createPerformanceEntries } from './createPerformanceEntry';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+jest.useFakeTimers();
 
 async function advanceTimers(time: number) {
   jest.advanceTimersByTime(time);

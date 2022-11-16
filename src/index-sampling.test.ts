@@ -3,7 +3,7 @@ jest.unmock('@sentry/browser');
 // mock functions need to be imported first
 import { mockRrweb, mockSdk } from '@test';
 
-jest.useFakeTimers({ advanceTimers: true });
+jest.useFakeTimers();
 
 describe('Replay (sampling)', () => {
   it('does nothing if not sampled', async () => {

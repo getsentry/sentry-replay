@@ -5,7 +5,7 @@ import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 import { SESSION_IDLE_DURATION } from './session/constants';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+jest.useFakeTimers();
 
 describe('Replay - stop', () => {
   let replay: Replay;

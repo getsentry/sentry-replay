@@ -13,7 +13,7 @@ import {
 } from './session/constants';
 import { Replay } from './';
 
-jest.useFakeTimers({ advanceTimers: true });
+jest.useFakeTimers();
 
 async function advanceTimers(time: number) {
   jest.advanceTimersByTime(time);
