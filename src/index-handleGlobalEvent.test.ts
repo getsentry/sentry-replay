@@ -5,8 +5,18 @@ import { resetSdkMock } from '@test/mocks';
 import { REPLAY_EVENT_NAME } from './session/constants';
 import { Replay } from './';
 
+const _setInterval = setInterval;
+const _clearInterval = clearInterval;
 jest.useFakeTimers();
 
+let interval: any;
+beforeAll(function () {
+  interval = _setInterval(() => jest.advanceTimersByTime(20), 20);
+});
+
+afterAll(function () {
+  _clearInterval(interval);
+});
 let replay: Replay;
 
 beforeEach(async () => {

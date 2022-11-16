@@ -13,7 +13,18 @@ import {
 } from './session/constants';
 import { Replay } from './';
 
+const _setInterval = setInterval;
+const _clearInterval = clearInterval;
 jest.useFakeTimers();
+
+let interval: any;
+beforeAll(function () {
+  interval = _setInterval(() => jest.advanceTimersByTime(20), 20);
+});
+
+afterAll(function () {
+  _clearInterval(interval);
+});
 
 async function advanceTimers(time: number) {
   jest.advanceTimersByTime(time);
@@ -34,6 +45,7 @@ describe('Replay (errorSampleRate)', () => {
         stickySession: true,
       }
     ));
+    // jest.advanceTimersToNextTimer();
   });
 
   afterEach(async () => {
@@ -393,11 +405,13 @@ describe('Replay (errorSampleRate)', () => {
     mockRecord.takeFullSnapshot(true);
 
     jest.runAllTimers();
+    jest.advanceTimersByTime(20);
     await new Promise(process.nextTick);
 
     captureException(new Error('testing'));
 
     jest.runAllTimers();
+    jest.advanceTimersByTime(20);
     await new Promise(process.nextTick);
 
     expect(replay.session?.started).toBe(BASE_TIMESTAMP + ELAPSED + 20);
