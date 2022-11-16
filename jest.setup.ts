@@ -166,75 +166,10 @@ const toHaveSentReplay = function (
             .join('\n'),
   };
 };
-/*
-class AsymmetricMatcher<T> {
-  protected sample: T;
-  $$typeof: symbol;
-  inverse?: boolean;
-
-  constructor(sample: T) {
-    this.$$typeof = Symbol.for('jest.asymmetricMatcher');
-    this.sample = sample;
-  }
-}
-
-class CloseTo extends AsymmetricMatcher<number> {
-  private precision: number;
-
-  constructor(sample: number, precision = 2, inverse = false) {
-    super(sample);
-    this.inverse = inverse;
-    this.precision = precision;
-  }
-
-  asymmetricMatch(other: number) {
-    let result = false;
-
-    if (other === Infinity && this.sample === Infinity) {
-      result = true; // Infinity - Infinity is NaN
-    } else if (other === -Infinity && this.sample === -Infinity) {
-      result = true; // -Infinity - -Infinity is NaN
-    } else {
-      result =
-        Math.abs(this.sample - other) < Math.pow(10, -this.precision) / 2;
-    }
-    return this.inverse ? !result : result;
-  }
-
-  toString() {
-    return `Number${this.inverse ? 'Not' : ''}CloseTo`;
-  }
-
-  getExpectedType() {
-    return 'number';
-  }
-} */
-
-const closeTo = function (
-  other: jest.Mocked<number>,
-  sample: number,
-  precision = 2
-) {
-  let result = false;
-  if (other === Infinity && sample === Infinity) {
-    result = true; // Infinity - Infinity is NaN
-  } else if (other === -Infinity && this.sample === -Infinity) {
-    result = true; // -Infinity - -Infinity is NaN
-  } else {
-    result = Math.abs(this.sample - other) < Math.pow(10, -precision) / 2;
-  }
-
-  return {
-    pass: result,
-    message: () =>
-      `${other} is not close to ${sample} (precision: ${precision})`,
-  };
-};
 
 expect.extend({
   toHaveSameSession,
   toHaveSentReplay,
-  closeTo,
 });
 
 declare global {
@@ -247,10 +182,6 @@ declare global {
     interface Matchers<R> {
       toHaveSentReplay(expected?: SentReplayExpected): R;
       toHaveSameSession(expected: undefined | Session): R;
-    }
-
-    interface Expect {
-      closeTo(expected: number, precision?: number): void;
     }
   }
 }
