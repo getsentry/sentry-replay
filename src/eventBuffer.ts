@@ -100,7 +100,7 @@ export class EventBufferCompressionWorker implements IEventBuffer {
     args,
   }: WorkerRequest): Promise<WorkerResponse['response']> {
     return new Promise((resolve, reject) => {
-      const listener = ({ data }: MessageEvent<WorkerResponse>) => {
+      const listener = ({ data }: MessageEvent) => {
         if (data.method !== method) {
           return;
         }

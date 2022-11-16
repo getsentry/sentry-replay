@@ -179,7 +179,7 @@ export class Replay implements Integration {
       stickySession,
       initialFlushDelay,
       sessionSampleRate: usingDeprecatedReplaysSamplingRate
-        ? replaysSamplingRate
+        ? (replaysSamplingRate as number)
         : sessionSampleRate,
       errorSampleRate: usingDeprecatedCaptureOnlyOnError
         ? 1.0
