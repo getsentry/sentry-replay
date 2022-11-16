@@ -38,6 +38,10 @@ export interface WorkerRequest {
 
 declare global {
   const __SENTRY_REPLAY_VERSION__: string;
+
+  // PerformancePaintTiming is only available since TS 4.4, so for now we just define this here
+  // see: https://github.com/microsoft/TypeScript/blob/main/lib/lib.dom.d.ts#L10564
+  type PerformancePaintTiming = PerformanceEntry;
 }
 
 /**
