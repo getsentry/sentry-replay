@@ -20,6 +20,8 @@ module.exports = {
       { vars: 'all', varsIgnorePattern: '^_', argsIgnorePattern: '^_' },
     ],
 
+    '@typescript-eslint/no-explicit-any': 'off',
+
     'simple-import-sort/imports': [
       'error',
       {

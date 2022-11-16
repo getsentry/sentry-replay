@@ -32,7 +32,7 @@ export function createEventBuffer({ useCompression }: CreateEventBufferParams) {
 }
 
 export interface IEventBuffer {
-  get length(): number;
+  readonly length: number;
   destroy(): void;
   addEvent(event: RecordingEvent, isCheckout?: boolean): void;
   finish(): Promise<string | Uint8Array>;

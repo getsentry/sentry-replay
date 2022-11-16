@@ -117,7 +117,7 @@ const toHaveSentReplay = function (
 
   const results = expected
     ? Object.entries(actualObj)
-        .map(([key, val]: [key: keyof SentReplayExpected, val: any]) => {
+        .map(([key, val]: [keyof SentReplayExpected, any]) => {
           return [
             !expectedObj?.[key] || this.equals(expectedObj[key], val),
             key,
