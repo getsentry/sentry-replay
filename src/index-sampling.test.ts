@@ -18,12 +18,12 @@ describe('Replay (sampling)', () => {
 
     jest.spyOn(replay, 'loadSession');
     jest.spyOn(replay, 'addListeners');
-    // @ts-expect-error private
+    // @ts-ignore private
     expect(replay.initialState).toEqual(undefined);
     jest.runAllTimers();
 
     expect(replay.session?.sampled).toBe(false);
-    // @ts-expect-error private
+    // @ts-ignore private
     expect(replay.context).toEqual(
       expect.objectContaining({
         initialTimestamp: expect.any(Number),

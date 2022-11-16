@@ -22,6 +22,14 @@ module.exports = {
 
     '@typescript-eslint/no-explicit-any': 'off',
 
+    // Make sure that all ts-ignore comments are given a description.
+    '@typescript-eslint/ban-ts-comment': [
+      'warn',
+      {
+        'ts-ignore': 'allow-with-description',
+      },
+    ],
+
     'simple-import-sort/imports': [
       'error',
       {

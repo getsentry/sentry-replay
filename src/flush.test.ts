@@ -99,7 +99,7 @@ afterEach(async () => {
   replay.clearSession();
   replay.loadSession({ expiry: SESSION_IDLE_DURATION });
   mockRecord.takeFullSnapshot.mockClear();
-  // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
+  // @ts-ignore: The operand of a 'delete' operator must be optional.ts(2790)
   delete window.location;
   Object.defineProperty(window, 'location', {
     value: prevLocation,

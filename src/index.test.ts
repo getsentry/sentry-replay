@@ -65,7 +65,7 @@ describe('Replay', () => {
   afterEach(async () => {
     jest.runAllTimers();
     await new Promise(process.nextTick);
-    // @ts-expect-error: The operand of a 'delete' operator must be optional.ts(2790)
+    // @ts-ignore: The operand of a 'delete' operator must be optional.ts(2790)
     delete window.location;
     Object.defineProperty(window, 'location', {
       value: prevLocation,
@@ -305,7 +305,7 @@ describe('Replay', () => {
     const initialSession = replay.session;
 
     expect(initialSession?.id).toBeDefined();
-    // @ts-expect-error private member
+    // @ts-ignore private member
     expect(replay.context).toEqual(
       expect.objectContaining({
         initialUrl: 'http://localhost/',
@@ -379,7 +379,7 @@ describe('Replay', () => {
     });
 
     // `context` should be reset when a new session is created
-    // @ts-expect-error private member
+    // @ts-ignore private member
     expect(replay.context).toEqual(
       expect.objectContaining({
         initialUrl: 'http://dummy/',
@@ -393,7 +393,7 @@ describe('Replay', () => {
     const initialSession = replay.session;
 
     expect(initialSession?.id).toBeDefined();
-    // @ts-expect-error private member
+    // @ts-ignore private member
     expect(replay.context).toEqual(
       expect.objectContaining({
         initialUrl: 'http://localhost/',
@@ -438,7 +438,7 @@ describe('Replay', () => {
     // Should be the same session because user has been idle and no events have caused a new session to be created
     expect(replay).toHaveSameSession(initialSession);
 
-    // @ts-expect-error private
+    // @ts-ignore private
     expect(replay.stopRecording).toBeUndefined();
 
     // Now do a click
@@ -492,7 +492,7 @@ describe('Replay', () => {
     });
 
     // `context` should be reset when a new session is created
-    // @ts-expect-error private member
+    // @ts-ignore private member
     expect(replay.context).toEqual(
       expect.objectContaining({
         initialUrl: 'http://dummy/',
@@ -822,7 +822,7 @@ describe('Replay', () => {
     );
 
     // This should be null because `addEvent` has not been called yet
-    // @ts-expect-error private member
+    // @ts-ignore private member
     expect(replay.context.earliestEvent).toBe(null);
     expect(mockTransportSend).toHaveBeenCalledTimes(0);
 
@@ -863,7 +863,7 @@ describe('Replay', () => {
     });
 
     // This gets reset after sending replay
-    // @ts-expect-error private member
+    // @ts-ignore private member
     expect(replay.context.earliestEvent).toBe(null);
   });
 
