@@ -2,21 +2,11 @@ import { Error } from '@test/fixtures/error';
 import { Transaction } from '@test/fixtures/transaction';
 import { resetSdkMock } from '@test/mocks';
 
+import { useFakeTimers } from './../test/utils/use-fake-timers';
 import { REPLAY_EVENT_NAME } from './session/constants';
 import { Replay } from './';
 
-const _setInterval = setInterval;
-const _clearInterval = clearInterval;
-jest.useFakeTimers();
-
-let interval: any;
-beforeAll(function () {
-  interval = _setInterval(() => jest.advanceTimersByTime(20), 20);
-});
-
-afterAll(function () {
-  _clearInterval(interval);
-});
+useFakeTimers();
 let replay: Replay;
 
 beforeEach(async () => {

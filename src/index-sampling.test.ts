@@ -3,18 +3,9 @@ jest.unmock('@sentry/browser');
 // mock functions need to be imported first
 import { mockRrweb, mockSdk } from '@test';
 
-const _setInterval = setInterval;
-const _clearInterval = clearInterval;
-jest.useFakeTimers();
+import { useFakeTimers } from './../test/utils/use-fake-timers';
 
-let interval: any;
-beforeAll(function () {
-  interval = _setInterval(() => jest.advanceTimersByTime(20), 20);
-});
-
-afterAll(function () {
-  _clearInterval(interval);
-});
+useFakeTimers();
 
 describe('Replay (sampling)', () => {
   it('does nothing if not sampled', async () => {

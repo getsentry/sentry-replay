@@ -2,21 +2,11 @@ import * as SentryUtils from '@sentry/utils';
 // mock functions need to be imported first
 import { BASE_TIMESTAMP, mockRrweb, mockSdk } from '@test';
 
+import { useFakeTimers } from './../test/utils/use-fake-timers';
 import { SESSION_IDLE_DURATION } from './session/constants';
 import { Replay } from './';
 
-const _setInterval = setInterval;
-const _clearInterval = clearInterval;
-jest.useFakeTimers();
-
-let interval: any;
-beforeAll(function () {
-  interval = _setInterval(() => jest.advanceTimersByTime(20), 20);
-});
-
-afterAll(function () {
-  _clearInterval(interval);
-});
+useFakeTimers();
 
 describe('Replay - stop', () => {
   let replay: Replay;
