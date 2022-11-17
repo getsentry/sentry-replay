@@ -42,6 +42,8 @@ declare global {
   // PerformancePaintTiming is only available since TS 4.4, so for now we just define this here
   // see: https://github.com/microsoft/TypeScript/blob/main/lib/lib.dom.d.ts#L10564
   type PerformancePaintTiming = PerformanceEntry;
+  // @ts-ignore declare again, this _should_ be there but somehow is not available in worker context
+  type PerformanceNavigationTiming = PerformanceEntry;
 }
 
 /**
