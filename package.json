@@ -10,7 +10,7 @@
     "bootstrap": "yarn && cd demo && yarn #TODO: change after migration",
     "build": "NODE_ENV=production yarn build:all",
     "build:dev": "NODE_ENV=development yarn build:all",
-    "build:all": "yarn clean && run-p build:worker build:core",
+    "build:all": "run-s clean build:worker build:core",
     "build:core": "yarn build:rollup --config config/rollup.config.core.ts",
     "build:worker": "yarn build:rollup --config config/rollup.config.worker.ts",
     "build:rollup": "rollup --configPlugin @rollup/plugin-typescript",
