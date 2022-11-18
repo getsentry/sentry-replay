@@ -1,5 +1,3 @@
-import { jest } from '@jest/globals';
-
 import { RecordingEvent } from '../../src/types';
 
 type RecordAdditionalProperties = {
