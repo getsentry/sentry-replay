@@ -18,6 +18,7 @@
     "build:dev:watch": "NODE_ENV=development yarn build:all:watch",
     "build:all:watch": "yarn clean && run-p \"build:worker --watch\" \"build:core --watch\"",
     "build:npm": "yarn pack #TODO: use JS sdk prepack script after migration",
+    "circularDepCheck": "#TODO comment in after migration: madge --circular src/index.ts",
     "clean": "rimraf dist sentry-replay-*.tgz",
     "fix": "run-s fix:eslint fix:prettier",
     "fix:eslint": "eslint . --format stylish --fix",
