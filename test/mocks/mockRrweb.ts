@@ -44,7 +44,6 @@ jest.mock('rrweb', () => {
   });
 
   return {
-    // @ts-expect-error spreading actual rrweb library
     ...ActualRrweb,
     record: mockRecordFn,
   };
