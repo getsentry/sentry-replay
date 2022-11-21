@@ -6,7 +6,7 @@
   This file is originally from the sentry-javascript repo. It's only here to ease
   migration into the monorepo and will be removed once the migration is complete.
   TODO: Delete once migrated to sentry-javascript
-  */
+*/
 
 /*
   This script prepares the central `build` directory for NPM package creation.
