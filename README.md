@@ -1,6 +1,6 @@
 # Sentry Replay
 
-## Attention: This project was moved to the [getsentry/javascript](https://github.com/getsentry/sentry-javascript/tree/master/packages/replay) monorepo.
+## Attention: This project was moved to the [getsentry/sentry-javascript](https://github.com/getsentry/sentry-javascript/tree/master/packages/replay) monorepo.
 
 
 While moving, we introduced some breaking changes, along with a version bump from 0.x to 7.x. Please take a look at the [migration guide](https://github.com/getsentry/sentry-javascript/blob/master/packages/replay/MIGRATION.md) to find out what changed.
